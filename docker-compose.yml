@@ -1,0 +1,87 @@
+#  network layout for wiretap testing
+#
+# ┌──────────┐
+# │ client   │
+# │          │
+# │ 10.1.0.2 │
+# │ fd:1::2  ├┬───────────────────────┐
+# ├──────────┼│ exposed network       │
+# ├──────────┼│ 10.1.0.0/16,fd:1::/64 │
+# │ 10.1.0.3 ├┴───────────────────────┘
+# │ fd:1::3  │
+# │          │
+# │ server   │
+# │          │
+# │ 10.2.0.3 │
+# │ fd:2::3  ├┬───────────────────────┐
+# ├──────────┼│ target network        │
+# ├──────────┼│ 10.2.0.0/16,fd:2::/64 │
+# │ 10.2.0.4 ├┴───────────────────────┘
+# │ fd:2::4  │
+# │          │
+# │ target   │
+# └──────────┘
+
+services:
+  client:
+    build: 
+      context: .
+      dockerfile: wiretap.Dockerfile
+      args:
+        http_proxy: $http_proxy
+        https_proxy: $https_proxy
+    image: wiretap:latest
+    networks:
+      exposed:
+        ipv4_address: 10.1.0.2
+        ipv6_address: fd:1::2
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    environment:
+    - DISPLAY=host.docker.internal:0
+  server: 
+    depends_on: 
+      - client 
+    image: wiretap:latest
+    networks:
+      exposed:
+        ipv4_address: 10.1.0.3
+        ipv6_address: fd:1::3
+      target:
+        ipv4_address: 10.2.0.3
+        ipv6_address: fd:2::3
+    environment:
+    - DISPLAY=host.docker.internal:0
+  target:
+    depends_on: 
+      - client 
+    image: wiretap:latest
+    networks:
+      target:
+        ipv4_address: 10.2.0.4
+        ipv6_address: fd:2::4
+
+networks:
+  exposed:
+    enable_ipv6: true
+    driver: bridge
+    name: exposed
+    ipam:
+      config:
+        - subnet: 10.1.0.0/16
+          gateway: 10.1.0.1
+        - subnet: fd:1::/64
+          gateway: fd:1::1
+  target:
+    enable_ipv6: true
+    driver: bridge
+    name: target 
+    ipam:
+      config:
+        - subnet: 10.2.0.0/16
+          gateway: 10.2.0.1
+        - subnet: fd:2::/64
+          gateway: fd:2::1

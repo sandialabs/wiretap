@@ -1,0 +1,34 @@
+before:
+  hooks:
+    - go mod tidy
+    - make clean
+builds:
+  - env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X wiretap/cmd.Version={{.Version}}
+    flags:
+      - -trimpath
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+      - arm
+      - 386
+checksum:
+  name_template: "checksums.txt"
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+changelog:
+  use: github-native
+#  sort: asc
+#  filters:
+#    exclude:
+#      - "^docs:"
+#      - "^test:"
+# modelines, feel free to remove those if you don't want/use them:
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj

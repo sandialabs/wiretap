@@ -1,0 +1,15 @@
+# wiretap configs and logs
+*.log
+*.conf
+
+# binaries
+bin/*
+!bin/.gitkeep
+src/dist
+
+# macOS
+.DS_Store
+
+# drawio
+*.bkp
+*.dtmp
