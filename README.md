@@ -44,7 +44,7 @@ If you want to compile it yourself or can't find the OS/ARCH you're looking for,
 
 <div align="center">
 
-![Wiretap Configure Arguments](media/Wiretap_Arguments.svg)
+![Wiretap Configure Arguments](media/Wiretap_Configure.svg)
 </div>
 
 On the client machine, run Wiretap in configure mode to build a config
@@ -96,6 +96,11 @@ On the remote machine, upload the binary and then copy the command with the priv
 Confirm that the client and server have successfully completed the handshake. The client should see a successful handshake in whatever WireGuard interface is running. If using the command-line tools, check with `wg show`.
 
 ### Add Peers (optional)
+
+<div align="center">
+
+![Wiretap Add Arguments](media/Wiretap_Add.svg)
+</div>
 
 You can create new configurations after deployment for sharing access to the target network with others.
 
