@@ -9,7 +9,7 @@ In this diagram, the client has generated and installed a WireGuard configuratio
 
 <div align="center">
 
-![Wiretap Diagram](media/Wiretap_Animated.drawio.gif)
+![Wiretap Diagram](media/Wiretap_Animated.svg)
 </div>
 
 ## Quick Start
