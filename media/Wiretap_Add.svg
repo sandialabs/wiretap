@@ -156,12 +156,12 @@
 <foreignObject style="overflow: visible; text-align: left;" pointer-events="none" width="100%" height="100%" requiredFeatures="http://www.w3.org/TR/SVG11/feature#Extensibility">
     <div xmlns="http://www.w3.org/1999/xhtml" style="display: flex; align-items: unsafe center; justify-content: unsafe center; width: 189px; height: 1px; padding-top: 53px; margin-left: 596px;">
         <div style="box-sizing: border-box; font-size: 0px; text-align: center;" data-drawio-colors="color: rgb(0, 0, 0); ">
-            <div style="display: inline-block; font-size: 12px; font-family: Courier New; color: rgb(0, 0, 0); line-height: 1.2; pointer-events: none; font-weight: bold; white-space: normal; overflow-wrap: normal;">--endpoint 1.3.3.7:1337 <span style="font-weight: normal;">tells the Server how to connect to the second Client</span>
+            <div style="display: inline-block; font-size: 12px; font-family: Courier New; color: rgb(0, 0, 0); line-height: 1.2; pointer-events: none; font-weight: bold; white-space: normal; overflow-wrap: normal;">--endpoint 1.3.3.8:1337 <span style="font-weight: normal;">tells the Server how to connect to the second Client</span>
             </div>
         </div>
     </div>
 </foreignObject>
-<text x="690" y="57" fill="rgb(0, 0, 0)" font-family="Courier New" font-size="12px" text-anchor="middle" font-weight="bold">--endpoint 1.3.3.7:1337 tells th...</text>
+<text x="690" y="57" fill="rgb(0, 0, 0)" font-family="Courier New" font-size="12px" text-anchor="middle" font-weight="bold">--endpoint 1.3.3.8:1337 tells th...</text>
 </switch>
 </g>
 <rect x="610" y="360.9" width="191" height="94.2" fill="#d5e8d4" stroke="#82b366" pointer-events="none"/>
