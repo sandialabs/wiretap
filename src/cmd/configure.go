@@ -146,6 +146,16 @@ func (c configureCmdConfig) Run() {
 		}
 	}
 
+	// Generate server config file.
+	serverConfig := fmt.Sprintf("[Interface]\nPrivate = %s\n[Peer]\nPublic = %s\n",
+		config.GetPeerPrivateKey(0),
+		config.GetPublicKey(),
+	)
+
+	if len(config.GetPeerEndpoint(0)) > 0 {
+		serverConfig = fmt.Sprintf("%sEndpoint = %s\n", serverConfig, config.GetPeerEndpoint(0))
+	}
+
 	// Write and format output.
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, "Configuration successfully generated.")
@@ -157,6 +167,11 @@ func (c configureCmdConfig) Run() {
 	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, GreenBold("args:"), Green(argString))
+	fmt.Fprintln(color.Output)
+	fmt.Fprintln(color.Output, GreenBold("server config:"))
+	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+	fmt.Fprint(color.Output, WhiteBold(serverConfig))
+	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {
 		fmt.Fprintln(color.Output, clipboardStatus)

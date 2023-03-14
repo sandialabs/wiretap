@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -22,6 +25,7 @@ import (
 )
 
 type serveCmdConfig struct {
+	configFile string
 	privateKey string
 	publicKey  string
 	endpoint   string
@@ -40,6 +44,7 @@ type serveCmdConfig struct {
 
 // Defaults for serve command.
 var serveCmd = serveCmdConfig{
+	configFile: "",
 	privateKey: "",
 	publicKey:  "",
 	endpoint:   Endpoint,
@@ -63,6 +68,9 @@ func init() {
 		Use:   "serve",
 		Short: "Listen and proxy traffic into target network",
 		Long:  `Listen and proxy traffic into target network`,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return serveCmd.PreRun()
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			serveCmd.Run()
 		},
@@ -70,6 +78,7 @@ func init() {
 
 	rootCmd.AddCommand(cmd)
 
+	cmd.Flags().StringVarP(&serveCmd.configFile, "config-file", "f", serveCmd.configFile, "wireguard config file to read from")
 	cmd.Flags().StringVarP(&serveCmd.privateKey, "private", "", serveCmd.privateKey, "wireguard private key")
 	cmd.Flags().StringVarP(&serveCmd.publicKey, "public", "", serveCmd.publicKey, "wireguard public key of remote peer")
 	cmd.Flags().StringVarP(&serveCmd.endpoint, "endpoint", "e", serveCmd.endpoint, "socket address of remote peer that server will connect to (example \"1.2.3.4:51820\")")
@@ -85,12 +94,6 @@ func init() {
 	cmd.Flags().IntVarP(&serveCmd.mtu, "mtu", "m", serveCmd.mtu, "tunnel MTU")
 	cmd.Flags().BoolVarP(&serveCmd.logging, "log", "l", serveCmd.logging, "enable logging to file")
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
-
-	// Cannot serve without public key of at least one peer.
-	err := cmd.MarkFlagRequired("public")
-	if err != nil {
-		fmt.Println("Failed to mark public flag as required:", err)
-	}
 
 	// Quiet and debug flags must be used independently.
 	cmd.MarkFlagsMutuallyExclusive("debug", "quiet")
@@ -110,6 +113,124 @@ func init() {
 		helpFunc(cmd, args)
 	})
 }
+
+// Checks for config file flag and reads config file if present.
+func (c serveCmdConfig) PreRun() error {
+	// Check for config file flag.
+	if serveCmd.configFile == "" && serveCmd.publicKey == "" {
+		return errors.New("Either --config-file or --public must be specified")
+	}
+
+	if serveCmd.configFile != "" {
+		fmt.Println("Reading config file, ignoring other flags")
+
+		// Read config file to string.
+		config, err := ioutil.ReadFile(serveCmd.configFile)
+		if err != nil {
+			return errors.New("Failed to read config file")
+		}
+
+		// Parse config file.
+		lines := strings.Split(string(config), "\n")
+		parserState := 0
+		sawPublic := false
+		sawPeer  := false
+		sawInterface := false
+
+		for _, line := range lines {
+			line, _, _ = strings.Cut(line, "#")
+			line = strings.TrimSpace(line)
+			lineLower := strings.ToLower(line)
+			if len(line) == 0 {
+				continue
+			}
+			if lineLower == "[interface]" {
+				if sawInterface {
+					return errors.New("Multiple interfaces are not supported")
+				}
+				sawInterface = true
+				parserState = 1
+				continue
+			}
+			if lineLower == "[peer]" {
+				if sawPeer {
+					return errors.New("Multiple peers are not supported")
+				}
+				sawPeer = true
+				parserState = 2
+				continue
+			}
+			if parserState == 0 {
+				return errors.New("Line must occur in a section")
+			}
+			equals := strings.IndexByte(line, '=')
+			if equals < 0 {
+				return errors.New("Config key is missing an equals separator")
+			}
+			key, val := strings.TrimSpace(lineLower[:equals]), strings.TrimSpace(line[equals+1:])
+			if len(val) == 0 {
+				return errors.New("Key must have a value")
+			}
+			if parserState == 1 {
+				switch key {
+				case "private":
+					serveCmd.privateKey = val
+				case "port":
+					port, err := strconv.Atoi(val)
+					if err != nil {
+						return errors.New("Failed to parse listen port")
+					}
+					serveCmd.port = port
+				case "ipv4":
+					serveCmd.addr4 = val
+				case "ipv6":
+					serveCmd.addr6 = val
+				case "api":
+					serveCmd.apiAddr = val
+				case "mtu":
+					mtu, err := strconv.Atoi(val)
+					if err != nil {
+						return errors.New("Failed to parse MTU")
+					}
+					serveCmd.mtu = mtu
+				default:
+					return errors.New("Unknown key in [interface] section")
+				}
+			}
+			if parserState == 2 {
+				switch key {
+				case "public":
+					serveCmd.publicKey = val
+					sawPublic = true
+				case "endpoint":
+					serveCmd.endpoint = val
+				case "allowed":
+					serveCmd.allowedIPs = strings.Split(val, ",")
+				case "keepalive":
+					keepalive, err := strconv.Atoi(val)
+					if err != nil {
+						return errors.New("Failed to parse keepalive")
+					}
+					serveCmd.keepalive = keepalive
+				default:
+					return errors.New("Unknown key in [peer] section")
+				}
+			}
+		}
+		if !sawPublic {
+			return errors.New("Config file must contain a public key")
+		}
+	} else {
+		// Config file flag is not set
+		// Cannot serve without public key of at least one peer.
+		if serveCmd.publicKey == "" {
+			return errors.New("public key of peer must be specified")
+		}
+	}
+
+	return nil
+}
+
 
 // Run parses/processes/validates args and then connects to peer,
 // proxying traffic from peer into local network.
