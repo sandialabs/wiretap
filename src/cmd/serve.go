@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/netip"
 	"os"
@@ -125,7 +124,7 @@ func (c serveCmdConfig) PreRun() error {
 		fmt.Println("Reading config file, ignoring other flags")
 
 		// Read config file to string.
-		config, err := ioutil.ReadFile(serveCmd.configFile)
+		config, err := os.ReadFile(serveCmd.configFile)
 		if err != nil {
 			return errors.New("Failed to read config file")
 		}
