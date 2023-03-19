@@ -147,7 +147,7 @@ func (c serveCmdConfig) Run() {
 
 	// Check for required flags.
 	if !viper.IsSet("Peer.publickey") {
-		check("Public key is required", errors.New("Public key is required"))
+		check("config error", errors.New("public key of peer is required"))
 	}
 
 	configArgs := peer.ConfigArgs{
