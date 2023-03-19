@@ -166,7 +166,10 @@ func (c configureCmdConfig) Run() {
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, serverFileStatus)
 	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, GreenBold("server command:"), Green(config.AsServerCommand()))
+	fmt.Fprintln(color.Output, GreenBold("server command:"))
+	fmt.Fprintln(color.Output, Green(config.AsServerCommand()))
+	fmt.Fprintln(color.Output, GreenBold("or"))
+	fmt.Fprintln(color.Output, Green("./wiretap serve -f " + c.serverConfigFile))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {
 		fmt.Fprintln(color.Output, clipboardStatus)
