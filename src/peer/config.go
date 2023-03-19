@@ -255,3 +255,34 @@ func (c *Config) AsIPC() string {
 
 	return s.String()
 }
+
+func (c *Config) AsServerCommand() string {
+	var s strings.Builder
+
+	s.WriteString(fmt.Sprintf("WIRETAP_INTERFACE_PRIVATE=%s WIRETAP_PEER_PUBLIC=%s",
+		c.GetPeerPrivateKey(0),
+		c.GetPublicKey(),
+	))
+
+	if len(c.GetPeerEndpoint(0)) > 0 {
+		s.WriteString(fmt.Sprintf(" WIRETAP_PEER_ENDPOINT=%s", c.GetPeerEndpoint(0)))
+	}
+
+	s.WriteString(fmt.Sprintf(" ./wiretap serve"))
+
+	return s.String()
+}
+
+func (c *Config) AsServerFile() string {
+	var s strings.Builder
+
+	s.WriteString("[Interface]\n")
+	s.WriteString(fmt.Sprintf("PrivateKey = %s\n", c.GetPeerPrivateKey(0)))
+	s.WriteString("[Peer]\n")
+	s.WriteString(fmt.Sprintf("PublicKey = %s\n", c.GetPublicKey()))
+	if len(c.GetPeerEndpoint(0)) > 0 {
+		s.WriteString(fmt.Sprintf("Endpoint = %s\n", c.GetPeerEndpoint(0)))
+	}
+
+	return s.String()
+}
