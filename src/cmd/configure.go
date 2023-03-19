@@ -32,7 +32,7 @@ var configureCmd = configureCmdConfig{
 	endpoint:         Endpoint,
 	port:             Port,
 	configFile:       Config,
-	serverConfigFile: "",
+	serverConfigFile: ServerConfig,
 	writeToClipboard: false,
 	addr4:            Subnet4.Addr().Next().Next().String() + "/32",
 	addr6:            Subnet6.Addr().Next().Next().String() + "/128",
@@ -164,10 +164,8 @@ func (c configureCmdConfig) Run() {
 	fmt.Fprint(color.Output, WhiteBold(config.AsFile()))
 	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
 	fmt.Fprintln(color.Output)
-	if c.serverConfigFile != "" {
-		fmt.Fprintln(color.Output, serverFileStatus)
-		fmt.Fprintln(color.Output)
-	}
+	fmt.Fprintln(color.Output, serverFileStatus)
+	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, GreenBold("server command:"), Green(config.AsServerCommand()))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {
