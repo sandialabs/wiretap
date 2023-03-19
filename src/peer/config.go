@@ -259,7 +259,7 @@ func (c *Config) AsIPC() string {
 func (c *Config) AsServerCommand() string {
 	var s strings.Builder
 
-	s.WriteString(fmt.Sprintf("WIRETAP_INTERFACE_PRIVATE=%s WIRETAP_PEER_PUBLIC=%s",
+	s.WriteString(fmt.Sprintf("WIRETAP_INTERFACE_PRIVATEKEY=%s WIRETAP_PEER_PUBLICKEY=%s",
 		c.GetPeerPrivateKey(0),
 		c.GetPublicKey(),
 	))
