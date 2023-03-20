@@ -77,16 +77,36 @@ func init() {
 	cmd.Flags().IntP("mtu", "m", 1420, "tunnel MTU")
 
 	// Bind deprecated flags to viper.
-	viper.BindPFlag("Interface.privatekey", cmd.Flags().Lookup("private"))
-	viper.BindPFlag("Interface.port", cmd.Flags().Lookup("port"))
-	viper.BindPFlag("Interface.ipv4", cmd.Flags().Lookup("ipv4"))
-	viper.BindPFlag("Interface.ipv6", cmd.Flags().Lookup("ipv6"))
-	viper.BindPFlag("Interface.api", cmd.Flags().Lookup("api"))
-	viper.BindPFlag("Interface.mtu", cmd.Flags().Lookup("mtu"))
-	viper.BindPFlag("Peer.publickey", cmd.Flags().Lookup("public"))
-	viper.BindPFlag("Peer.endpoint", cmd.Flags().Lookup("endpoint"))
-	viper.BindPFlag("Peer.allowed", cmd.Flags().Lookup("allowed"))
-	viper.BindPFlag("Peer.keepalive", cmd.Flags().Lookup("keepalive"))
+	if err := viper.BindPFlag("Interface.privatekey", cmd.Flags().Lookup("private")); err != nil {
+		check("error binding privatekey flag to viper", err)
+	}
+	if err := viper.BindPFlag("Interface.port", cmd.Flags().Lookup("port")); err != nil {
+		check("error binding port flag to viper", err)
+	}
+	if err := viper.BindPFlag("Interface.ipv4", cmd.Flags().Lookup("ipv4")); err != nil {
+		check("error binding ipv4 flag to viper", err)
+	}
+	if err := viper.BindPFlag("Interface.ipv6", cmd.Flags().Lookup("ipv6")); err != nil {
+		check("error binding ipv6 flag to viper", err)
+	}
+	if err := viper.BindPFlag("Interface.api", cmd.Flags().Lookup("api")); err != nil {
+		check("error binding api flag to viper", err)
+	}
+	if err := viper.BindPFlag("Interface.mtu", cmd.Flags().Lookup("mtu")); err != nil {
+		check("error binding mtu flag to viper", err)
+	}
+	if err := viper.BindPFlag("Peer.publickey", cmd.Flags().Lookup("public")); err != nil {
+		check("error binding publickey flag to viper", err)
+	}
+	if err := viper.BindPFlag("Peer.endpoint", cmd.Flags().Lookup("endpoint")); err != nil {
+		check("error binding endpoint flag to viper", err)
+	}
+	if err := viper.BindPFlag("Peer.allowed", cmd.Flags().Lookup("allowed")); err != nil {
+		check("error binding allowed flag to viper", err)
+	}
+	if err := viper.BindPFlag("Peer.keepalive", cmd.Flags().Lookup("keepalive")); err != nil {
+		check("error binding keepalive flag to viper", err)
+	}
 
 	cmd.Flags().SortFlags = false
 

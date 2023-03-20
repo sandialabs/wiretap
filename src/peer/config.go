@@ -268,7 +268,7 @@ func (c *Config) AsServerCommand() string {
 		s.WriteString(fmt.Sprintf(" WIRETAP_PEER_ENDPOINT=%s", c.GetPeerEndpoint(0)))
 	}
 
-	s.WriteString(fmt.Sprintf(" ./wiretap serve"))
+	s.WriteString(" ./wiretap serve")
 
 	return s.String()
 }
