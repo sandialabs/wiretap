@@ -32,8 +32,6 @@ type serveCmdConfig struct {
 }
 
 type wiretapDefaultConfig struct {
-	privateKey string
-	publicKey  string
 	endpoint   string
 	port       int
 	allowedIPs []string
