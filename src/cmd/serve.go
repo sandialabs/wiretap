@@ -31,6 +31,19 @@ type serveCmdConfig struct {
 	logFile    string
 }
 
+type wiretapDefaultConfig struct {
+	privateKey string
+	publicKey  string
+	endpoint   string
+	port       int
+	allowedIPs []string
+	addr4      string
+	addr6      string
+	apiAddr    string
+	keepalive  int
+	mtu        int
+}
+
 // Defaults for serve command.
 var serveCmd = serveCmdConfig{
 	configFile: "",
@@ -38,6 +51,17 @@ var serveCmd = serveCmdConfig{
 	debug:      false,
 	logging:    false,
 	logFile:    "wiretap.log",
+}
+
+var wiretapDefault = wiretapDefaultConfig{
+	endpoint:   Endpoint,
+	port:       Port,
+	allowedIPs: []string{Subnet4.Addr().Next().Next().String() + "/32", Subnet6.Addr().Next().Next().String() + "/128"},
+	addr4:      Subnet4.Addr().Next().String() + "/32",
+	addr6:      Subnet6.Addr().Next().String() + "/128",
+	apiAddr:    ApiAddr.String(),
+	mtu:        1420,
+	keepalive:  Keepalive,
 }
 
 // Add serve command and set flags.
@@ -67,14 +91,14 @@ func init() {
 	// Deprecated flags, kept for backwards compatibility.
 	cmd.Flags().StringP("private", "", "", "wireguard private key")
 	cmd.Flags().StringP("public", "", "", "wireguard public key of remote peer")
-	cmd.Flags().StringP("endpoint", "e", Endpoint, "socket address of remote peer that server will connect to (example \"1.2.3.4:51820\")")
-	cmd.Flags().IntP("port", "p", Port, "wireguard listener port")
-	cmd.Flags().StringSliceP("allowed", "a", []string{Subnet4.Addr().Next().Next().String() + "/32", Subnet6.Addr().Next().Next().String() + "/128"}, "comma-separated list of CIDR IP ranges to associate with peer")
-	cmd.Flags().StringP("ipv4", "4", Subnet4.Addr().Next().String() + "/32", "virtual ipv4 address of wireguard interface")
-	cmd.Flags().StringP("ipv6", "6", Subnet6.Addr().Next().String() + "/128", "virtual ipv6 address of wireguard interface")
-	cmd.Flags().StringP("api", "0", ApiAddr.String(), "address of API service")
-	cmd.Flags().IntP("keepalive", "k", Keepalive, "tunnel keepalive in seconds")
-	cmd.Flags().IntP("mtu", "m", 1420, "tunnel MTU")
+	cmd.Flags().StringP("endpoint", "e", wiretapDefault.endpoint, "socket address of remote peer that server will connect to (example \"1.2.3.4:51820\")")
+	cmd.Flags().IntP("port", "p", wiretapDefault.port, "wireguard listener port")
+	cmd.Flags().StringSliceP("allowed", "a", wiretapDefault.allowedIPs, "comma-separated list of CIDR IP ranges to associate with peer")
+	cmd.Flags().StringP("ipv4", "4", wiretapDefault.addr4, "virtual ipv4 address of wireguard interface")
+	cmd.Flags().StringP("ipv6", "6", wiretapDefault.addr6, "virtual ipv6 address of wireguard interface")
+	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
+	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
+	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
 
 	// Bind deprecated flags to viper.
 	if err := viper.BindPFlag("Interface.privatekey", cmd.Flags().Lookup("private")); err != nil {
@@ -107,6 +131,17 @@ func init() {
 	if err := viper.BindPFlag("Peer.keepalive", cmd.Flags().Lookup("keepalive")); err != nil {
 		check("error binding keepalive flag to viper", err)
 	}
+
+	// Set default values for viper.
+	viper.SetDefault("Interface.port", wiretapDefault.port)
+	viper.SetDefault("Interface.ipv4", wiretapDefault.addr4)
+	viper.SetDefault("Interface.ipv6", wiretapDefault.addr6)
+	viper.SetDefault("Interface.api", wiretapDefault.apiAddr)
+	viper.SetDefault("Interface.mtu", wiretapDefault.mtu)
+	viper.SetDefault("Peer.endpoint", wiretapDefault.endpoint)
+	viper.SetDefault("Peer.allowed", wiretapDefault.allowedIPs)
+	viper.SetDefault("Peer.keepalive", wiretapDefault.keepalive)
+
 
 	cmd.Flags().SortFlags = false
 
