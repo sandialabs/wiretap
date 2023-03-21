@@ -256,19 +256,34 @@ func (c *Config) AsIPC() string {
 	return s.String()
 }
 
-func (c *Config) AsServerCommand() string {
+func (c *Config) AsServerCommand(shell string) string {
 	var s strings.Builder
+	var keys []string
+	var vals []string
 
-	s.WriteString(fmt.Sprintf("WIRETAP_INTERFACE_PRIVATEKEY=%s WIRETAP_PEER_PUBLICKEY=%s",
-		c.GetPeerPrivateKey(0),
-		c.GetPublicKey(),
-	))
+	keys = append(keys, "WIRETAP_INTERFACE_PRIVATEKEY")
+	vals = append(vals, c.GetPeerPrivateKey(0))
+
+	keys = append(keys, "WIRETAP_PEER_PUBLICKEY")
+	vals = append(vals, c.GetPublicKey())
 
 	if len(c.GetPeerEndpoint(0)) > 0 {
-		s.WriteString(fmt.Sprintf(" WIRETAP_PEER_ENDPOINT=%s", c.GetPeerEndpoint(0)))
+		keys = append(keys, "WIRETAP_PEER_ENDPOINT")
+		vals = append(vals, c.GetPeerEndpoint(0))
 	}
 
-	s.WriteString(" ./wiretap serve")
+	switch shell {
+	case "POSIX":
+		for i := 0; i < len(keys); i++ {
+			s.WriteString(fmt.Sprintf("%s=%s ", keys[i], vals[i]))
+		}
+		s.WriteString("./wiretap serve")
+	case "POWERSHELL":
+		for i := 0; i < len(keys); i++ {
+			s.WriteString(fmt.Sprintf("$env:%s=\"%s\"; ", keys[i], vals[i]))
+		}
+		s.WriteString(".\\wiretap.exe serve")
+	}
 
 	return s.String()
 }

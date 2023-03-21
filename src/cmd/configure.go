@@ -146,7 +146,7 @@ func (c configureCmdConfig) Run() {
 
 	var clipboardStatus string
 	if c.writeToClipboard {
-		err = clipboard.WriteAll(config.AsServerCommand())
+		err = clipboard.WriteAll(config.AsServerCommand("POSIX"))
 		if err != nil {
 			clipboardStatus = fmt.Sprintf("%s %s", RedBold("clipboard:"), Red(fmt.Sprintf("error copying to clipboard: %v", err)))
 		} else {
@@ -167,9 +167,9 @@ func (c configureCmdConfig) Run() {
 	fmt.Fprintln(color.Output, serverFileStatus)
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, GreenBold("server command:"))
-	fmt.Fprintln(color.Output, Green(config.AsServerCommand()))
-	fmt.Fprintln(color.Output, GreenBold("or"))
-	fmt.Fprintln(color.Output, Green("./wiretap serve -f " + c.serverConfigFile))
+	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(config.AsServerCommand("POSIX")))
+	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(config.AsServerCommand("POWERSHELL")))
+	fmt.Fprintln(color.Output, Cyan("Config File: "), Green("./wiretap serve -f " + c.serverConfigFile))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {
 		fmt.Fprintln(color.Output, clipboardStatus)
