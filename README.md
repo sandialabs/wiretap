@@ -17,7 +17,7 @@ In this diagram, the client has generated and installed a WireGuard configuratio
 1. Download binaries from the [releases](https://github.com/sandialabs/wiretap/releases) page, one for your client machine and one for your server (if different os/arch)
 2. Run `./wiretap configure --port <port> --endpoint <socket> --routes <routes>` with the appropriate arguments
 3. Import the resulting `wiretap.conf` file into WireGuard on the client machine
-4. Copy and paste the arguments output from the configure command into Wiretap on the server machine
+4. Copy and paste the server command output that best suits your target system into Wiretap on the server machine
 
 ## Requirements
 
@@ -62,20 +62,25 @@ Following the example in the diagram:
 Configuration successfully generated.
 Import the config into WireGuard locally and pass the arguments below to Wiretap on the remote machine.
 
-config: wiretap.conf
+client config: wiretap.conf
 ────────────────────────────────
 [Interface]
-PrivateKey = qCvx4DBXqemoO8B7eRI2H9Em8zJn++rIBKO+F+ufQWE=
+PrivateKey = 0PjJSe+uFvCGolet/WJN7EBXauB9jjUfNhdwk9i4Q2Q=
 Address = 192.168.0.2/32
 Address = fd::2/128
 ListenPort = 1337
 
 [Peer]
-PublicKey = 6NxBlwJHujEFr5n9qvFAUyinj0l7Wadd/ZDQMCqTJAA=
+PublicKey = +xi5lM2V7nPwJ/02mF7CpK4pzgrtof2h1ykClkQqgnQ=
 AllowedIPs = 10.0.0.0/24,a::/128
 ────────────────────────────────
 
-args: serve --private qGrU0juci5PLJ1ydSufE/UwlErL/bqfcz6uWil705UU= --public ZhRIAcGVwT7l9dhEXv7cvYKwLxOZJR4bgU4zePZaT04= --endpoint 1.3.3.7:1337
+server config: wiretap_server.conf
+
+server command:
+POSIX Shell:  WIRETAP_INTERFACE_PRIVATEKEY=8O7ul6vWcdlcy515RD2kNwU2TRvEoe0UwCl1XjnFQ2Q= WIRETAP_PEER_PUBLICKEY=7QorkqrYFfSUpg+kw6ipFMee9d8r5BGmJprceluUzX8= WIRETAP_PEER_ENDPOINT=1.3.3.7:1337 ./wiretap serve
+ PowerShell:  $env:WIRETAP_INTERFACE_PRIVATEKEY="8O7ul6vWcdlcy515RD2kNwU2TRvEoe0UwCl1XjnFQ2Q="; $env:WIRETAP_PEER_PUBLICKEY="7QorkqrYFfSUpg+kw6ipFMee9d8r5BGmJprceluUzX8="; $env:WIRETAP_PEER_ENDPOINT="1.3.3.7:1337"; .\wiretap.exe serve
+Config File:  ./wiretap serve -f wiretap_server.conf
 
 ```
 
@@ -89,9 +94,13 @@ Don't forget to disable or remove the tunnel when you're done (e.g., `sudo wg-qu
 ### Deploy
 
 On the remote machine, upload the binary and then copy the command with the private and public keys to start Wiretap in server mode:
+```powershell
+$env:WIRETAP_INTERFACE_PRIVATEKEY="8O7ul6vWcdlcy515RD2kNwU2TRvEoe0UwCl1XjnFQ2Q="; $env:WIRETAP_PEER_PUBLICKEY="7QorkqrYFfSUpg+kw6ipFMee9d8r5BGmJprceluUzX8="; $env:WIRETAP_PEER_ENDPOINT="1.3.3.7:1337"; .\wiretap.exe serve
 ```
-.\wiretap.exe serve --private qGrU0juci5PLJ1ydSufE/UwlErL/bqfcz6uWil705UU= --public ZhRIAcGVwT7l9dhEXv7cvYKwLxOZJR4bgU4zePZaT04= --endpoint 1.3.3.7:1337
-```
+
+There are two other ways to pass arguments to the server:
+1. With a config file: `-f wiretap_server.conf`
+2. The legacy method of passing command line arguments (`--endpoint 1.3.3.7:1337 ...`). Be aware that this method exposes arguments to other users on the system. Compromising the private key could allow someone to connect to the client as a peer and/or decrypt traffic
 
 Confirm that the client and server have successfully completed the handshake. The client should see a successful handshake in whatever WireGuard interface is running. If using the command-line tools, check with `wg show`.
 
@@ -274,7 +283,7 @@ Configure Wiretap from the client machine. Remember, `--endpoint` is how the ser
 * `--routes` needs to be the subnet of the target network: `10.2.0.0/16`. But there is also an IPv6 subnet, so we should also put `fd:2::/64`. If you just wanted to route traffic to the target host, you could put `10.2.0.4/32` here instead
 
 ```bash
-./wiretap_linux_amd64 configure --endpoint 10.1.0.2:51820 --routes 10.2.0.0/16,fd:2::/64
+./wiretap configure --endpoint 10.1.0.2:51820 --routes 10.2.0.0/16,fd:2::/64
 ```
 
 Install the newly created WireGuard config with:
@@ -286,7 +295,7 @@ wg-quick up ./wiretap.conf
 Copy and paste the Wiretap arguments printed by the configure command into the server machine prompt. It should look like this:
 
 ```bash
-./wiretap_linux_amd64 serve --private <key> --public <key> --endpoint 10.1.0.2:51820
+WIRETAP_INTERFACE_PRIVATEKEY=<key> WIRETAP_PEER_PUBLICKEY=<key> WIRETAP_PEER_ENDPOINT=10.1.0.2:51820 ./wiretap serve
 ```
 
 #### Test
@@ -360,7 +369,7 @@ In this example, we're forwarding 51821/udp on the server to 51820 on the client
 
 Finally, run Wiretap with the forwarded local port as your endpoint on the server system:
 ```bash
-./wiretap serve --private <key> --public <key> --endpoint localhost:51821
+WIRETAP_INTERFACE_PRIVATEKEY=<key> WIRETAP_PEER_PUBLICKEY=<key> WIRETAP_PEER_ENDPOINT=localhost:51821 ./wiretap serve
 ```
 
 ### Nested Tunnels

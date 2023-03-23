@@ -28,6 +28,8 @@ else
     EXT=
 endif
 
+OUTPUT=$(BIN)/$@_$(OS)_$(ARCH)$(EXT)## Output location
+
 # ld flags
 LDFLAGS=-s -w
 LDFLAGS+=-X wiretap/cmd.Version=$(VERSION)
@@ -37,7 +39,7 @@ LDFLAGS+=-X wiretap/cmd.Version=$(VERSION)
 
 ## wiretap: Build binary for the specified OS and architecture 
 wiretap:
-	$(ENV) $(GOBUILD) $(NOARGFLAGS) -o $(BIN)/$@_$(OS)_$(ARCH)$(EXT) -ldflags "$(LDFLAGS)" *.go
+	$(ENV) $(GOBUILD) $(NOARGFLAGS) -o $(OUTPUT) -ldflags "$(LDFLAGS)" *.go
 
 ## all: Build binaries for every OS/ARCH pair listed in the Makefile
 all: 

@@ -140,7 +140,6 @@ func init() {
 	viper.SetDefault("Peer.allowed", wiretapDefault.allowedIPs)
 	viper.SetDefault("Peer.keepalive", wiretapDefault.keepalive)
 
-
 	cmd.Flags().SortFlags = false
 
 	// Hide deprecated flags and log flags.
@@ -211,7 +210,7 @@ func (c serveCmdConfig) Run() {
 				PublicKey:                   viper.GetString("Peer.publickey"),
 				Endpoint:                    viper.GetString("Peer.endpoint"),
 				PersistentKeepaliveInterval: viper.GetInt("Peer.keepalive"),
-				AllowedIPs:                  strings.Split(viper.GetString("Peer.allowed"), ","),
+				AllowedIPs:                  viper.GetStringSlice("Peer.allowed"),
 			},
 		},
 		Addresses: []string{viper.GetString("Interface.ipv4"), viper.GetString("Interface.ipv6")},

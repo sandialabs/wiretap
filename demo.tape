@@ -42,6 +42,7 @@
 #   Show                            Show the subsequent commands in the output
 #
 # Run `socat TCP-LISTEN:6000,reuseaddr,fork UNIX-CLIENT:\"$DISPLAY\"` before recording to enable clipboard operations
+# If using XQuartz, also run `xhost + localhost`
 
 Output media/wiretap_demo.mp4
 
@@ -100,7 +101,7 @@ Sleep 2s
 
 # show curl doesn't work, then configure wiretap
 Type "curl http://10.2.0.4 --connect-timeout 3" Sleep 1s Enter Sleep 6s
-Type "./wiretap_linux_arm64 configure --endpoint 10.1.0.2:51820 --routes 10.2.0.0/16,fd:2::/64 -c" Sleep 1s Enter Sleep 4s
+Type "./wiretap configure --endpoint 10.1.0.2:51820 --routes 10.2.0.0/16,fd:2::/64 -c" Sleep 1s Enter Sleep 4s
 Type "wg-quick up ./wiretap.conf" Sleep 1s Enter Sleep 2s
 
 Ctrl+b
@@ -109,9 +110,8 @@ Sleep 2s
 
 # args are in clipboard now
 # this is bash magic, ESC+Ctrl+E will expand the current line
-# type ./wiretap_linux_arm64 $(xsel)
+# type $(xsel)
 # run expansion to make command line look like it was pasted
-Type "./wiretap_linux_arm64 " Sleep 1s
 Hide
 Type "$(xsel)"
 Escape
