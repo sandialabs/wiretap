@@ -13,16 +13,17 @@ import (
 
 // Defaults shared by multiple commands.
 var (
-	Version    = "v0.0.0"
-	Endpoint   = ""
-	Port       = 51820
-	Config     = "wiretap.conf"
-	Keepalive  = 25
-	ShowHidden = false
-	ApiAddr    = netip.MustParsePrefix("a::/128")
-	ApiPort    = 80
-	Subnet4    = netip.MustParsePrefix("192.168.0.0/24")
-	Subnet6    = netip.MustParsePrefix("fd::/64")
+	Version      = "v0.0.0"
+	Endpoint     = ""
+	Port         = 51820
+	Config       = "wiretap.conf"
+	ServerConfig = "wiretap_server.conf"
+	Keepalive    = 25
+	ShowHidden   = false
+	ApiAddr      = netip.MustParsePrefix("a::/128")
+	ApiPort      = 80
+	Subnet4      = netip.MustParsePrefix("192.168.0.0/24")
+	Subnet6      = netip.MustParsePrefix("fd::/64")
 )
 
 // Define colors.

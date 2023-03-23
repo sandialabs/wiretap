@@ -14,7 +14,7 @@ RUN go mod download -x
 # Build Wiretap
 COPY ./src /wiretap
 
-RUN make BIN=.
+RUN make OUTPUT=./wiretap
 
 # Run webserver for testing
 CMD python3 -m http.server --bind :: 80

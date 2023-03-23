@@ -17,6 +17,7 @@ type configureCmdConfig struct {
 	endpoint         string
 	port             int
 	configFile       string
+	serverConfigFile string
 	writeToClipboard bool
 	addr4            string
 	addr6            string
@@ -31,11 +32,29 @@ var configureCmd = configureCmdConfig{
 	endpoint:         Endpoint,
 	port:             Port,
 	configFile:       Config,
+	serverConfigFile: ServerConfig,
 	writeToClipboard: false,
 	addr4:            Subnet4.Addr().Next().Next().String() + "/32",
 	addr6:            Subnet6.Addr().Next().Next().String() + "/128",
 	apiAddr:          ApiAddr.String(),
 	disableApi:       false,
+}
+
+// Check if file exists, add number suffix if it does.
+func getUniqueFilename(filename string) string {
+	var err error
+	count := 1
+	ext := filepath.Ext(filename)
+	basename := strings.TrimSuffix(filename, ext)
+	for {
+		_, err = os.Stat(filename)
+		if os.IsNotExist(err) {
+			break
+		}
+		filename = fmt.Sprintf("%s_%d%s", basename, count, ext)
+		count += 1
+	}
+	return filename
 }
 
 // Add command and set flags.
@@ -56,6 +75,7 @@ func init() {
 	cmd.Flags().StringVarP(&configureCmd.endpoint, "endpoint", "e", configureCmd.endpoint, "socket address of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
 	cmd.Flags().IntVarP(&configureCmd.port, "port", "p", configureCmd.port, "port of local wireguard listener")
 	cmd.Flags().StringVarP(&configureCmd.configFile, "output", "o", configureCmd.configFile, "wireguard config output filename")
+	cmd.Flags().StringVarP(&configureCmd.serverConfigFile, "server-config-output", "s", configureCmd.serverConfigFile, "wiretap server config output filename")
 	cmd.Flags().BoolVarP(&configureCmd.writeToClipboard, "clipboard", "c", configureCmd.writeToClipboard, "copy configuration args to clipboard")
 
 	cmd.Flags().StringVarP(&configureCmd.addr4, "ipv4", "4", configureCmd.addr4, "virtual wireguard interface ipv4 address")
@@ -104,41 +124,29 @@ func (c configureCmdConfig) Run() {
 	config, err := peer.GetConfig(configArgs)
 	check("failed to generate config", err)
 
-	// Add number to filename if it already exists.
-	count := 1
-	ext := filepath.Ext(c.configFile)
-	basename := strings.TrimSuffix(c.configFile, ext)
-	for {
-		_, err = os.Stat(c.configFile)
-		if os.IsNotExist(err) {
-			break
-		}
-		c.configFile = fmt.Sprintf("%s_%d%s", basename, count, ext)
-		count += 1
-	}
-
 	// Write config file and get status string.
+	c.configFile = getUniqueFilename(c.configFile)
 	var fileStatus string
 	err = os.WriteFile(c.configFile, []byte(config.AsFile()), 0600)
 	if err != nil {
-		fileStatus = fmt.Sprintf("%s %s", RedBold("config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
+		fileStatus = fmt.Sprintf("%s %s", RedBold("client config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
 	} else {
-		fileStatus = fmt.Sprintf("%s %s", GreenBold("config:"), Green(c.configFile))
+		fileStatus = fmt.Sprintf("%s %s", GreenBold("client config:"), Green(c.configFile))
 	}
 
-	// Generate argument string.
-	argString := fmt.Sprintf("serve --private %s --public %s",
-		config.GetPeerPrivateKey(0),
-		config.GetPublicKey(),
-	)
-
-	if len(config.GetPeerEndpoint(0)) > 0 {
-		argString = fmt.Sprintf("%s --endpoint %s", argString, config.GetPeerEndpoint(0))
+	// Write server config file and get status string.
+	c.serverConfigFile = getUniqueFilename(c.serverConfigFile)
+	var serverFileStatus string
+	err = os.WriteFile(c.serverConfigFile, []byte(config.AsServerFile()), 0600)
+	if err != nil {
+		serverFileStatus = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
+	} else {
+		serverFileStatus = fmt.Sprintf("%s %s", GreenBold("server config:"), Green(c.serverConfigFile))
 	}
 
 	var clipboardStatus string
 	if c.writeToClipboard {
-		err = clipboard.WriteAll(argString)
+		err = clipboard.WriteAll(config.AsServerCommand("POSIX"))
 		if err != nil {
 			clipboardStatus = fmt.Sprintf("%s %s", RedBold("clipboard:"), Red(fmt.Sprintf("error copying to clipboard: %v", err)))
 		} else {
@@ -156,7 +164,12 @@ func (c configureCmdConfig) Run() {
 	fmt.Fprint(color.Output, WhiteBold(config.AsFile()))
 	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
 	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, GreenBold("args:"), Green(argString))
+	fmt.Fprintln(color.Output, serverFileStatus)
+	fmt.Fprintln(color.Output)
+	fmt.Fprintln(color.Output, GreenBold("server command:"))
+	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(config.AsServerCommand("POSIX")))
+	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(config.AsServerCommand("POWERSHELL")))
+	fmt.Fprintln(color.Output, Cyan("Config File: "), Green("./wiretap serve -f " + c.serverConfigFile))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {
 		fmt.Fprintln(color.Output, clipboardStatus)
