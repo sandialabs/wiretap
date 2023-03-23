@@ -34,7 +34,7 @@ type serveCmdConfig struct {
 type wiretapDefaultConfig struct {
 	endpoint   string
 	port       int
-	allowedIPs []string
+	allowedIPs string
 	addr4      string
 	addr6      string
 	apiAddr    string
@@ -54,7 +54,7 @@ var serveCmd = serveCmdConfig{
 var wiretapDefault = wiretapDefaultConfig{
 	endpoint:   Endpoint,
 	port:       Port,
-	allowedIPs: []string{Subnet4.Addr().Next().Next().String() + "/32", Subnet6.Addr().Next().Next().String() + "/128"},
+	allowedIPs: fmt.Sprintf("%s,%s", Subnet4.Addr().Next().Next().String()+"/32", Subnet6.Addr().Next().Next().String()+"/128"),
 	addr4:      Subnet4.Addr().Next().String() + "/32",
 	addr6:      Subnet6.Addr().Next().String() + "/128",
 	apiAddr:    ApiAddr.String(),
@@ -91,7 +91,7 @@ func init() {
 	cmd.Flags().StringP("public", "", "", "wireguard public key of remote peer")
 	cmd.Flags().StringP("endpoint", "e", wiretapDefault.endpoint, "socket address of remote peer that server will connect to (example \"1.2.3.4:51820\")")
 	cmd.Flags().IntP("port", "p", wiretapDefault.port, "wireguard listener port")
-	cmd.Flags().StringSliceP("allowed", "a", wiretapDefault.allowedIPs, "comma-separated list of CIDR IP ranges to associate with peer")
+	cmd.Flags().StringP("allowed", "a", wiretapDefault.allowedIPs, "comma-separated list of CIDR IP ranges to associate with peer")
 	cmd.Flags().StringP("ipv4", "4", wiretapDefault.addr4, "virtual ipv4 address of wireguard interface")
 	cmd.Flags().StringP("ipv6", "6", wiretapDefault.addr6, "virtual ipv6 address of wireguard interface")
 	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
@@ -210,7 +210,7 @@ func (c serveCmdConfig) Run() {
 				PublicKey:                   viper.GetString("Peer.publickey"),
 				Endpoint:                    viper.GetString("Peer.endpoint"),
 				PersistentKeepaliveInterval: viper.GetInt("Peer.keepalive"),
-				AllowedIPs:                  viper.GetStringSlice("Peer.allowed"),
+				AllowedIPs:                  strings.Split(viper.GetString("Peer.allowed"), ","),
 			},
 		},
 		Addresses: []string{viper.GetString("Interface.ipv4"), viper.GetString("Interface.ipv6")},
