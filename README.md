@@ -5,7 +5,7 @@
 Wiretap is a transparent, VPN-like proxy server that tunnels traffic via WireGuard and requires no special privileges to run.
 </div>
 
-In this diagram, the client has generated and installed WireGuard configuration files that will route traffic destined for `10.0.0.0/24` through a WireGuard interface. Wiretap is then deployed to the server with a configuration that connects to the client as a WireGuard peer. The client can then interact with resources local to the server as if on the same network and chain additional to reach new networks.
+In this diagram, the client has generated and installed WireGuard configuration files that will route traffic destined for `10.0.0.0/24` through a WireGuard interface. Wiretap is then deployed to the server with a configuration that connects to the client as a WireGuard peer. The client can then interact with resources local to the server as if on the same network and chain additional servers to reach new networks. Access to the Wiretap network can also be shared with other clients.
 
 <div align="center">
 
@@ -398,8 +398,7 @@ The demo has four hosts and three networks for testing multi-hop/nested tunnels,
 
 <div align="center">
 
-
-https://user-images.githubusercontent.com/26662746/202822223-af752660-f263-43dc-bdf1-63140bab316b.mp4
+https://user-images.githubusercontent.com/26662746/230233549-964a0c91-9c9f-4bd8-b13e-36af08ff8425.mp4
 </div>
 
 ### Step-By-Step
