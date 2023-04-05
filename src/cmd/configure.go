@@ -89,8 +89,10 @@ func init() {
 	configureCmd.Flags().IntVarP(&configureCmdArgs.keepalive, "keepalive", "k", configureCmdArgs.keepalive, "tunnel keepalive in seconds, only applies to outbound handshakes")
 	configureCmd.Flags().IntVarP(&configureCmdArgs.mtu, "mtu", "m", configureCmdArgs.mtu, "tunnel MTU")
 
-	configureCmd.MarkFlagRequired("routes")
-	configureCmd.MarkFlagRequired("endpoint")
+	err := configureCmd.MarkFlagRequired("routes")
+	check("failed to mark flag required", err)
+	err = configureCmd.MarkFlagRequired("endpoint")
+	check("failed to mark flag required", err)
 
 	configureCmd.Flags().SortFlags = false
 
@@ -195,7 +197,8 @@ func (c configureCmdConfig) Run() {
 	serverConfigRelay.AddPeer(clientPeerConfigRelay)
 	serverConfigE2EE.AddPeer(clientPeerConfigE2EE)
 	if c.mtu != MTU {
-		serverConfigRelay.SetMTU(c.mtu)
+		err = serverConfigRelay.SetMTU(c.mtu)
+		check("failed to set mtu", err)
 	}
 
 	// Add number to filename if it already exists.

@@ -39,7 +39,8 @@ func init() {
 
 	addCmd.PersistentFlags().IntVarP(&addCmdArgs.keepalive, "keepalive", "k", addCmdArgs.keepalive, "tunnel keepalive in seconds")
 
-	addCmd.MarkPersistentFlagRequired("endpoint")
+	err := addCmd.MarkPersistentFlagRequired("endpoint")
+	check("failed to mark flag required", err)
 
 	addCmd.Flags().SortFlags = false
 	addCmd.PersistentFlags().SortFlags = false

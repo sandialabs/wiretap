@@ -364,7 +364,7 @@ func (c *Config) AsPeer() (p PeerConfig, err error) {
 		return p, err
 	}
 
-	p.SetPrivateKey(c.GetPrivateKey())
+	err = p.SetPrivateKey(c.GetPrivateKey())
 
 	return p, err
 }

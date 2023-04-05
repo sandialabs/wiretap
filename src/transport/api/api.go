@@ -208,7 +208,7 @@ func handleAddPeer(devRelay *device.Device, devE2EE *device.Device, config Serve
 			return
 		}
 
-		p.UnmarshalJSON(body)
+		err = p.UnmarshalJSON(body)
 		if err != nil {
 			writeErr(w, err)
 		}

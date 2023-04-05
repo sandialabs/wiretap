@@ -54,7 +54,8 @@ func init() {
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileServer, "server-output", "", addServerCmdArgs.configFileServer, "filename of server config output file")
 	addServerCmd.Flags().BoolVarP(&addServerCmdArgs.writeToClipboard, "clipboard", "c", addServerCmdArgs.writeToClipboard, "copy configuration args to clipboard")
 
-	addServerCmd.MarkFlagRequired("routes")
+	err := addServerCmd.MarkFlagRequired("routes")
+	check("failed to mark flag required", err)
 
 	addServerCmd.Flags().SortFlags = false
 	addServerCmd.PersistentFlags().SortFlags = false
@@ -204,7 +205,8 @@ func (c addServerCmdConfig) Run() {
 				check("failed to set endpoint", err)
 			}
 		}
-		leafServerPeerConfigRelay.SetAllowedIPs([]string{ClientRelaySubnet4.String(), ClientRelaySubnet6.String()})
+		err = leafServerPeerConfigRelay.SetAllowedIPs([]string{ClientRelaySubnet4.String(), ClientRelaySubnet6.String()})
+		check("failed to set allowedIPs", err)
 		serverConfigRelay.AddPeer(leafServerPeerConfigRelay)
 		serverConfigE2EE.AddPeer(clientPeerConfigE2EE)
 
@@ -279,7 +281,8 @@ func (c addServerCmdConfig) Run() {
 	}
 
 	if addArgs.port != Port {
-		serverConfigRelay.SetPort(addArgs.port)
+		err = serverConfigRelay.SetPort(addArgs.port)
+		check("failed to set port", err)
 	}
 
 	// Overwrite Relay file with new server peer if adding a server directly to the client.
