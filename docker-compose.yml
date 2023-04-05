@@ -20,6 +20,15 @@
 # │ fd:2::4  │
 # │          │
 # │ target   │
+# │          │
+# │ 10.3.0.4 │
+# │ fd:3::4  ├┬───────────────────────┐
+# ├──────────┼│ target2 network       │
+# ├──────────┼│ 10.3.0.0/16,fd:3::/64 │
+# │ 10.3.0.5 ├┴───────────────────────┘
+# │ fd:3::5  │
+# │          │
+# │ target2  │
 # └──────────┘
 
 services:
@@ -53,6 +62,11 @@ services:
       target:
         ipv4_address: 10.2.0.3
         ipv6_address: fd:2::3
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
     environment:
     - DISPLAY=host.docker.internal:0
   target:
@@ -63,6 +77,28 @@ services:
       target:
         ipv4_address: 10.2.0.4
         ipv6_address: fd:2::4
+      target2:
+        ipv4_address: 10.3.0.4
+        ipv6_address: fd:3::4
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+  target2:
+    depends_on: 
+      - client 
+    image: wiretap:latest
+    networks:
+      target2:
+        ipv4_address: 10.3.0.5
+        ipv6_address: fd:3::5
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+
 
 networks:
   exposed:
@@ -85,3 +121,13 @@ networks:
           gateway: 10.2.0.1
         - subnet: fd:2::/64
           gateway: fd:2::1
+  target2:
+    enable_ipv6: true
+    driver: bridge
+    name: target2
+    ipam:
+      config:
+        - subnet: 10.3.0.0/16
+          gateway: 10.3.0.1
+        - subnet: fd:3::/64
+          gateway: fd:3::1

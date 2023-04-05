@@ -2,9 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"net"
 	"net/netip"
-	"strconv"
 	"time"
 
 	"github.com/fatih/color"
@@ -20,7 +18,7 @@ type pingCmdConfig struct {
 // Defaults for ping command.
 // See root command for shared defaults.
 var pingCmd = pingCmdConfig{
-	apiAddr: ApiAddr.String(),
+	apiAddr: ApiSubnets.Addr().Next().Next().String(),
 }
 
 // Add command and set flags.
@@ -46,22 +44,16 @@ func init() {
 func (c pingCmdConfig) Run() {
 	var err error
 
-	apiPrefix, err := netip.ParsePrefix(c.apiAddr)
+	apiAddr, err := netip.ParseAddr(c.apiAddr)
 	check("failed to parse API address", err)
-	apiAddr := apiPrefix.Addr()
-
-	req := api.Request{
-		URL:    fmt.Sprintf("http://%s/ping", net.JoinHostPort(apiAddr.String(), strconv.Itoa(ApiPort))),
-		Method: "GET",
-	}
 
 	start := time.Now()
-	body, err := api.MakeRequest(req)
+	response, err := api.Ping(netip.AddrPortFrom(apiAddr, uint16(ApiPort)))
 	check("request failed", err)
 
 	duration := time.Since(start)
 
-	fmt.Fprintf(color.Output, "%s: %s\n", GreenBold("response"), Green(string(body)))
+	fmt.Fprintf(color.Output, "%s: %s\n", GreenBold("response"), Green(string(response)))
 	fmt.Fprintf(color.Output, "  %s: %v\n", WhiteBold("from"), apiAddr)
 	fmt.Fprintf(color.Output, "  %s: %f %s\n", WhiteBold("time"), float64(duration)/float64(time.Millisecond), Cyan("milliseconds"))
 }

@@ -47,14 +47,14 @@ var isOpenLock = sync.RWMutex{}
 
 // preroutingMatch matches packets in the prerouting stage.
 type preroutingMatch struct {
-	pktChan  chan *stack.PacketBuffer
+	pktChan  chan stack.PacketBufferPtr
 	endpoint *channel.Endpoint
 }
 
 // Match looks for SYN packets (start of a tcp conn). Before proxying connection, we need to check
 // if intendend destination is up. Drop the packet to prevent blocking, but start goroutine that
 // connects to destination. If destination is up, reinject packet and allow it through.
-func (m preroutingMatch) Match(hook stack.Hook, packet *stack.PacketBuffer, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool) {
+func (m preroutingMatch) Match(hook stack.Hook, packet stack.PacketBufferPtr, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool) {
 	if hook == stack.Prerouting {
 		// If SYN flag set, see if connection possible.
 		netHeader := packet.Network()
@@ -106,7 +106,7 @@ func (m preroutingMatch) Match(hook stack.Hook, packet *stack.PacketBuffer, inpu
 }
 
 // If destination is open, whitelist and reinject. Otherwise send reset.
-func checkIfOpen(conn tcpConn, pktChan chan *stack.PacketBuffer, packet *stack.PacketBuffer, endpoint *channel.Endpoint) {
+func checkIfOpen(conn tcpConn, pktChan chan stack.PacketBufferPtr, packet stack.PacketBufferPtr, endpoint *channel.Endpoint) {
 	log.Printf("(client %v) - Transport: TCP -> %v", conn.Source, conn.Dest)
 	c, err := net.Dial("tcp", conn.Dest)
 	if err != nil {
@@ -160,7 +160,7 @@ func Handle(tnet *netstack.Net, ipv4Addr netip.Addr, ipv6Addr netip.Addr, port u
 	}
 
 	match := preroutingMatch{
-		pktChan:  make(chan *stack.PacketBuffer, 1),
+		pktChan:  make(chan stack.PacketBufferPtr, 1),
 		endpoint: tnet.Endpoint(),
 	}
 
@@ -289,7 +289,6 @@ func handleConn(c net.Conn, ipAddr netip.Addr, netProto tcpip.NetworkProtocolNum
 	// Copy from new connection to peer
 	wg.Add(1)
 	go func() {
-		//io.Copy(io.MultiWriter(c, os.Stdout), newConn)
 		_, err := io.Copy(c, newConn)
 		if err != nil {
 			log.Printf("Error copying between connections: %v\n", err)
@@ -299,7 +298,6 @@ func handleConn(c net.Conn, ipAddr netip.Addr, netProto tcpip.NetworkProtocolNum
 	}()
 
 	// Copy from peer to new connection.
-	//io.Copy(io.MultiWriter(newConn, os.Stdout), c)
 	_, err := io.Copy(newConn, c)
 	if err != nil {
 		log.Printf("Error copying between connections: %v\n", err)
@@ -311,7 +309,7 @@ func handleConn(c net.Conn, ipAddr netip.Addr, netProto tcpip.NetworkProtocolNum
 }
 
 // sendICMPEchoResponse sends an echo response to the peer with a spoofed source address.
-func sendRST(s *stack.Stack, packet *stack.PacketBuffer) {
+func sendRST(s *stack.Stack, packet stack.PacketBufferPtr) {
 	var err error
 	var ipv4Layer *layers.IPv4
 	var ipv6Layer *layers.IPv6

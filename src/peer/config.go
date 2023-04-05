@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -13,12 +15,14 @@ import (
 
 type Config struct {
 	config    wgtypes.Config
+	mtu       int
 	peers     []PeerConfig
 	addresses []net.IPNet
 }
 
 type configJSON struct {
 	Config    wgtypes.Config
+	MTU       int
 	Peers     []PeerConfig
 	Addresses []net.IPNet
 }
@@ -27,6 +31,7 @@ type ConfigArgs struct {
 	PrivateKey   string
 	ListenPort   int
 	FirewallMark int
+	MTU          int
 	ReplacePeers bool
 	Peers        []PeerConfigArgs
 	Addresses    []string
@@ -54,6 +59,13 @@ func GetConfig(args ConfigArgs) (Config, error) {
 
 	if args.FirewallMark != 0 {
 		err = c.SetFirewallMark(args.FirewallMark)
+		if err != nil {
+			return Config{}, err
+		}
+	}
+
+	if args.MTU != 0 {
+		err = c.SetMTU(args.MTU)
 		if err != nil {
 			return Config{}, err
 		}
@@ -93,9 +105,101 @@ func NewConfig() (Config, error) {
 	}, nil
 }
 
+func ParseConfig(filename string) (c Config, err error) {
+	configBytes, err := os.ReadFile(filename)
+	if err != nil {
+		return c, err
+	}
+
+	for _, section := range strings.Split(string(configBytes), "\n\n") {
+		lines := strings.Split(section, "\n")
+		switch strings.ToLower(lines[0]) {
+		case "[interface]":
+			if c.config.PrivateKey != nil {
+				return c, errors.New("cannot have more than one interface section")
+			}
+			for _, line := range lines[1:] {
+				if len(line) == 0 || line[0] == '#' {
+					continue
+				}
+				key, value, err := parseConfigLine(line)
+				if err != nil {
+					return c, err
+				}
+				switch key {
+				case "privatekey":
+					err = c.SetPrivateKey(value)
+				case "address":
+					err = c.AddAddress(value)
+				case "listenport":
+					port, e := strconv.Atoi(value)
+					if e != nil {
+						return c, e
+					}
+					err = c.SetPort(port)
+				case "mtu":
+					mtu, e := strconv.Atoi(value)
+					if e != nil {
+						return c, e
+					}
+					err = c.SetMTU(mtu)
+				}
+				if err != nil {
+					return c, err
+				}
+			}
+		case "[peer]":
+			newPeer := PeerConfig{}
+			for _, line := range lines[1:] {
+				if len(line) == 0 || line[0] == '#' {
+					continue
+				}
+				key, value, err := parseConfigLine(line)
+				if err != nil {
+					return c, err
+				}
+				switch key {
+				case "endpoint":
+					err = newPeer.SetEndpoint(value)
+				case "allowedips":
+					err = newPeer.SetAllowedIPs(strings.Split(value, ","))
+				case "publickey":
+					err = newPeer.SetPublicKey(value)
+				case "persistentkeepalive":
+					keepalive, e := strconv.Atoi(value)
+					if e != nil {
+						return c, e
+					}
+					err = newPeer.SetPersistentKeepaliveInterval(keepalive)
+				}
+				if err != nil {
+					return c, err
+				}
+			}
+			if newPeer.GetPublicKey().String() != "" {
+				c.AddPeer(newPeer)
+			}
+		default:
+			return c, fmt.Errorf("unknown configuration section: %s", lines[0])
+		}
+	}
+
+	return c, nil
+}
+
+func parseConfigLine(line string) (string, string, error) {
+	split := strings.Fields(line)
+	if len(split) != 3 {
+		return "", "", fmt.Errorf("failed to parse line: incorrect number of fields: [%s]", line)
+	}
+
+	return strings.ToLower(strings.TrimSpace(split[0])), strings.TrimSpace(split[2]), nil
+}
+
 func (c *Config) MarshalJSON() ([]byte, error) {
 	return json.Marshal(configJSON{
 		c.config,
+		c.mtu,
 		c.peers,
 		c.addresses,
 	})
@@ -139,12 +243,25 @@ func (c *Config) SetPort(port int) error {
 	return nil
 }
 
+func (c *Config) ClearPort() {
+	c.config.ListenPort = nil
+}
+
 func (c *Config) SetFirewallMark(mark int) error {
 	if mark < 1 {
 		return errors.New("invalid firewall mark")
 	}
 
 	c.config.FirewallMark = &mark
+	return nil
+}
+
+func (c *Config) SetMTU(mtu int) error {
+	if mtu < 1 {
+		return errors.New("invalid mtu")
+	}
+
+	c.mtu = mtu
 	return nil
 }
 
@@ -156,22 +273,44 @@ func (c *Config) AddPeer(p PeerConfig) {
 	c.peers = append(c.peers, p)
 }
 
+func (c *Config) GetPeer(pub wgtypes.Key) *PeerConfig {
+	for i, p := range c.peers {
+		if p.config.PublicKey == pub {
+			return &c.peers[i]
+		}
+	}
+
+	return nil
+}
+
+func (c *Config) ClearPeers() {
+	c.peers = []PeerConfig{}
+}
+
 func (c *Config) SetAddresses(addrs []string) error {
 	c.addresses = []net.IPNet{}
 	for _, a := range addrs {
-		// Ignore empty strings.
-		if len(a) == 0 {
-			continue
-		}
-
-		_, ipnet, err := net.ParseCIDR(a)
+		err := c.AddAddress(a)
 		if err != nil {
 			return err
 		}
-
-		c.addresses = append(c.addresses, *ipnet)
 	}
 
+	return nil
+}
+
+func (c *Config) AddAddress(addr string) error {
+	// Ignore empty strings.
+	if len(addr) == 0 {
+		return nil
+	}
+
+	_, ipnet, err := net.ParseCIDR(addr)
+	if err != nil {
+		return err
+	}
+
+	c.addresses = append(c.addresses, *ipnet)
 	return nil
 }
 
@@ -218,6 +357,18 @@ func (c *Config) GetPeerEndpoint(i int) string {
 	return ""
 }
 
+// Convert config to peer config, only transfers keys.
+func (c *Config) AsPeer() (p PeerConfig, err error) {
+	p, err = NewPeerConfig()
+	if err != nil {
+		return p, err
+	}
+
+	p.SetPrivateKey(c.GetPrivateKey())
+
+	return p, err
+}
+
 func (c *Config) AsFile() string {
 	var s strings.Builder
 
@@ -226,7 +377,12 @@ func (c *Config) AsFile() string {
 	for _, a := range c.addresses {
 		s.WriteString(fmt.Sprintf("Address = %s\n", a.String()))
 	}
-	s.WriteString(fmt.Sprintf("ListenPort = %d\n", *c.config.ListenPort))
+	if c.config.ListenPort != nil {
+		s.WriteString(fmt.Sprintf("ListenPort = %d\n", *c.config.ListenPort))
+	}
+	if c.mtu != 0 {
+		s.WriteString(fmt.Sprintf("MTU = %d\n", c.mtu))
+	}
 	for _, p := range c.peers {
 		s.WriteString(fmt.Sprintf("\n%s", p.AsFile()))
 	}
@@ -256,20 +412,68 @@ func (c *Config) AsIPC() string {
 	return s.String()
 }
 
-func (c *Config) AsServerCommand(shell string) string {
+func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell string) string {
 	var s strings.Builder
 	var keys []string
 	var vals []string
 
-	keys = append(keys, "WIRETAP_INTERFACE_PRIVATEKEY")
-	vals = append(vals, c.GetPeerPrivateKey(0))
+	// Relay Interface.
+	keys = append(keys, "WIRETAP_RELAY_INTERFACE_PRIVATEKEY")
+	vals = append(vals, relayConfig.GetPrivateKey())
 
-	keys = append(keys, "WIRETAP_PEER_PUBLICKEY")
-	vals = append(vals, c.GetPublicKey())
+	if len(relayConfig.addresses) == 2 {
+		keys = append(keys, "WIRETAP_RELAY_INTERFACE_IPV4")
+		vals = append(vals, relayConfig.addresses[0].IP.String())
+		keys = append(keys, "WIRETAP_RELAY_INTERFACE_IPV6")
+		vals = append(vals, relayConfig.addresses[1].IP.String())
+	}
 
-	if len(c.GetPeerEndpoint(0)) > 0 {
-		keys = append(keys, "WIRETAP_PEER_ENDPOINT")
-		vals = append(vals, c.GetPeerEndpoint(0))
+	if relayConfig.config.ListenPort != nil {
+		keys = append(keys, "WIRETAP_RELAY_INTERFACE_PORT")
+		vals = append(vals, fmt.Sprint(*relayConfig.config.ListenPort))
+	}
+
+	if relayConfig.mtu != 0 {
+		keys = append(keys, "WIRETAP_RELAY_INTERFACE_MTU")
+		vals = append(vals, fmt.Sprint(relayConfig.mtu))
+	}
+
+	// Relay Peer.
+	keys = append(keys, "WIRETAP_RELAY_PEER_PUBLICKEY")
+	vals = append(vals, relayConfig.GetPeerPublicKey(0))
+
+	if len(relayConfig.peers) > 0 && len(relayConfig.peers[0].config.AllowedIPs) > 0 {
+		keys = append(keys, "WIRETAP_RELAY_PEER_ALLOWED")
+		vals = append(vals, func() string {
+			allowed := []string{}
+			for _, ip := range relayConfig.peers[0].config.AllowedIPs {
+				allowed = append(allowed, ip.String())
+			}
+			return strings.Join(allowed, ",")
+		}())
+	}
+
+	if len(relayConfig.GetPeerEndpoint(0)) > 0 {
+		keys = append(keys, "WIRETAP_RELAY_PEER_ENDPOINT")
+		vals = append(vals, relayConfig.GetPeerEndpoint(0))
+	}
+
+	// E2EE Interface.
+	keys = append(keys, "WIRETAP_E2EE_INTERFACE_PRIVATEKEY")
+	vals = append(vals, e2eeConfig.GetPrivateKey())
+
+	if len(e2eeConfig.addresses) == 1 {
+		keys = append(keys, "WIRETAP_E2EE_INTERFACE_API")
+		vals = append(vals, e2eeConfig.addresses[0].IP.String())
+	}
+
+	// E2EE Peer.
+	keys = append(keys, "WIRETAP_E2EE_PEER_PUBLICKEY")
+	vals = append(vals, e2eeConfig.GetPeerPublicKey(0))
+
+	if len(e2eeConfig.GetPeerEndpoint(0)) > 0 {
+		keys = append(keys, "WIRETAP_E2EE_PEER_ENDPOINT")
+		vals = append(vals, e2eeConfig.GetPeerEndpoint(0))
 	}
 
 	switch shell {
@@ -288,15 +492,55 @@ func (c *Config) AsServerCommand(shell string) string {
 	return s.String()
 }
 
-func (c *Config) AsServerFile() string {
+func CreateServerFile(relayConfig Config, e2eeConfig Config) string {
 	var s strings.Builder
 
-	s.WriteString("[Interface]\n")
-	s.WriteString(fmt.Sprintf("PrivateKey = %s\n", c.GetPeerPrivateKey(0)))
-	s.WriteString("[Peer]\n")
-	s.WriteString(fmt.Sprintf("PublicKey = %s\n", c.GetPublicKey()))
-	if len(c.GetPeerEndpoint(0)) > 0 {
-		s.WriteString(fmt.Sprintf("Endpoint = %s\n", c.GetPeerEndpoint(0)))
+	// Relay Interface.
+	s.WriteString("[Relay.Interface]\n")
+	s.WriteString(fmt.Sprintf("PrivateKey = %s\n", relayConfig.GetPrivateKey()))
+
+	if len(relayConfig.addresses) == 2 {
+		s.WriteString(fmt.Sprintf("IPv4 = %s\n", relayConfig.addresses[0].IP.String()))
+		s.WriteString(fmt.Sprintf("IPv6 = %s\n", relayConfig.addresses[1].IP.String()))
+	}
+
+	if relayConfig.config.ListenPort != nil {
+		s.WriteString(fmt.Sprintf("Port = %d\n", *relayConfig.config.ListenPort))
+	}
+
+	if relayConfig.mtu != 0 {
+		s.WriteString(fmt.Sprintf("MTU = %d\n", relayConfig.mtu))
+	}
+
+	// Relay Peer.
+	s.WriteString("\n[Relay.Peer]\n")
+
+	if len(relayConfig.peers) > 0 && len(relayConfig.peers[0].config.AllowedIPs) > 0 {
+		allowed := []string{}
+		for _, ip := range relayConfig.peers[0].config.AllowedIPs {
+			allowed = append(allowed, ip.String())
+		}
+		s.WriteString(fmt.Sprintf("Allowed = %s\n", strings.Join(allowed, ",")))
+	}
+
+	s.WriteString(fmt.Sprintf("PublicKey = %s\n", relayConfig.GetPeerPublicKey(0)))
+	if len(relayConfig.GetPeerEndpoint(0)) > 0 {
+		s.WriteString(fmt.Sprintf("Endpoint = %s\n", relayConfig.GetPeerEndpoint(0)))
+	}
+
+	// E2EE Interface.
+	s.WriteString("\n[E2EE.Interface]\n")
+	s.WriteString(fmt.Sprintf("PrivateKey = %s\n", e2eeConfig.GetPrivateKey()))
+
+	if len(e2eeConfig.addresses) == 1 {
+		s.WriteString(fmt.Sprintf("Api = %s\n", e2eeConfig.addresses[0].IP.String()))
+	}
+
+	// E2EE Peer.
+	s.WriteString("\n[E2EE.Peer]\n")
+	s.WriteString(fmt.Sprintf("PublicKey = %s\n", e2eeConfig.GetPeerPublicKey(0)))
+	if len(e2eeConfig.GetPeerEndpoint(0)) > 0 {
+		s.WriteString(fmt.Sprintf("Endpoint = %s\n", e2eeConfig.GetPeerEndpoint(0)))
 	}
 
 	return s.String()

@@ -102,7 +102,8 @@ Sleep 2s
 # show curl doesn't work, then configure wiretap
 Type "curl http://10.2.0.4 --connect-timeout 3" Sleep 1s Enter Sleep 6s
 Type "./wiretap configure --endpoint 10.1.0.2:51820 --routes 10.2.0.0/16,fd:2::/64 -c" Sleep 1s Enter Sleep 4s
-Type "wg-quick up ./wiretap.conf" Sleep 1s Enter Sleep 2s
+Type "wg-quick up ./wiretap_relay.conf" Sleep 1s Enter Sleep 2s
+Type "wg-quick up ./wiretap_e2ee.conf" Sleep 1s Enter Sleep 2s
 
 Ctrl+b
 Left

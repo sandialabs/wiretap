@@ -1,4 +1,4 @@
-// Package API handles the internal API running on the server.
+// Package API handles the internal API running on all servers.
 package api
 
 import (
@@ -11,10 +11,12 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"sync"
 
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
@@ -25,8 +27,50 @@ import (
 	"wiretap/transport"
 )
 
+var nsLock sync.Mutex
+var devLock sync.Mutex
+var addressLock sync.Mutex
+var indexLock sync.Mutex
+
+var clientIndex uint64 = 0
+var serverIndex uint64 = 0
+
+type ServerConfigs struct {
+	RelayConfig *peer.Config
+	E2EEConfig  *peer.Config
+}
+
+type InterfaceType int
+
+const (
+	Relay InterfaceType = iota
+	E2EE
+)
+
+type NetworkState struct {
+	NextClientRelayAddr4 netip.Addr
+	NextClientRelayAddr6 netip.Addr
+	NextServerRelayAddr4 netip.Addr
+	NextServerRelayAddr6 netip.Addr
+	NextClientE2EEAddr4  netip.Addr
+	NextClientE2EEAddr6  netip.Addr
+	NextServerE2EEAddr4  netip.Addr
+	NextServerE2EEAddr6  netip.Addr
+	ApiAddr              netip.Addr
+	ServerRelaySubnet4   netip.Addr
+	ServerRelaySubnet6   netip.Addr
+}
+
+type AddAllowedIPsRequest struct {
+	PublicKey  wgtypes.Key
+	AllowedIPs []net.IPNet
+}
+
+var clientAddresses map[uint64]NetworkState
+var serverAddresses map[uint64]NetworkState
+
 // Handle adds rule to top of firewall rules that accepts direct connections to API.
-func Handle(tnet *netstack.Net, dev *device.Device, config *peer.Config, addr netip.Addr, port uint16, lock *sync.Mutex) {
+func Handle(tnet *netstack.Net, devRelay *device.Device, devE2EE *device.Device, relayConfig *peer.Config, e2eeConfig *peer.Config, addr netip.Addr, port uint16, lock *sync.Mutex, ns *NetworkState) {
 	s := tnet.Stack()
 
 	headerFilter := stack.IPHeaderFilter{
@@ -52,6 +96,24 @@ func Handle(tnet *netstack.Net, dev *device.Device, config *peer.Config, addr ne
 	transport.PushRule(s, rule, tid, addr.Is6())
 	lock.Unlock()
 
+	configs := ServerConfigs{
+		RelayConfig: relayConfig,
+		E2EEConfig:  e2eeConfig,
+	}
+
+	serverAddresses = make(map[uint64]NetworkState)
+	clientAddresses = make(map[uint64]NetworkState)
+
+	serverAddresses[serverIndex] = *ns
+	ns.NextServerRelayAddr4 = ns.NextServerRelayAddr4.Next()
+	ns.NextServerRelayAddr6 = ns.NextServerRelayAddr6.Next()
+	ns.NextClientE2EEAddr4 = ns.NextClientE2EEAddr4.Next()
+	ns.NextClientE2EEAddr6 = ns.NextClientE2EEAddr6.Next()
+	ns.NextServerE2EEAddr4 = ns.NextServerE2EEAddr4.Next()
+	ns.NextServerE2EEAddr6 = ns.NextServerE2EEAddr6.Next()
+	ns.ApiAddr = ns.ApiAddr.Next()
+	serverIndex += 1
+
 	// Stand up API server.
 	listener, err := tnet.ListenTCP(&net.TCPAddr{IP: addr.AsSlice(), Port: int(port)})
 	if err != nil {
@@ -59,8 +121,10 @@ func Handle(tnet *netstack.Net, dev *device.Device, config *peer.Config, addr ne
 	}
 
 	http.HandleFunc("/ping", wrapApi(handlePing()))
-	http.HandleFunc("/serverinfo", wrapApi(handleServerInfo(config)))
-	http.HandleFunc("/peers/add", wrapApi(handlePeerAdd(dev, config)))
+	http.HandleFunc("/serverinfo", wrapApi(handleServerInfo(configs)))
+	http.HandleFunc("/addpeer", wrapApi(handleAddPeer(devRelay, devE2EE, configs)))
+	http.HandleFunc("/allocate", wrapApi(handleAllocate(ns)))
+	http.HandleFunc("/addallowedips", wrapApi(handleAddAllowedIPs(devRelay, configs)))
 
 	log.Println("API: API listener up")
 	err = http.Serve(listener, nil)
@@ -77,6 +141,7 @@ func wrapApi(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// writeErr sets status to 500, logs error, and writes error in response.
 func writeErr(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusInternalServerError)
 	_, err = io.WriteString(w, err.Error())
@@ -85,6 +150,7 @@ func writeErr(w http.ResponseWriter, err error) {
 	}
 }
 
+// handlePing responds with pong message.
 func handlePing() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, err := io.WriteString(w, "pong")
@@ -94,14 +160,15 @@ func handlePing() http.HandlerFunc {
 	}
 }
 
-func handleServerInfo(config *peer.Config) http.HandlerFunc {
+// handleServerInfo responds with the configs for this server.
+func handleServerInfo(configs ServerConfigs) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 
-		body, err := json.Marshal(config)
+		body, err := json.Marshal(configs)
 		if err != nil {
 			writeErr(w, err)
 			return
@@ -114,61 +181,41 @@ func handleServerInfo(config *peer.Config) http.HandlerFunc {
 	}
 }
 
-func handlePeerAdd(dev *device.Device, config *peer.Config) http.HandlerFunc {
+// handleAddPeer adds a peer to either this server's relay or e2ee device.
+func handleAddPeer(devRelay *device.Device, devE2EE *device.Device, config ServerConfigs) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
 
+		interfaceParam, err := strconv.Atoi(r.URL.Query().Get("interface"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		interfaceType := InterfaceType(interfaceParam)
+
+		if interfaceType != Relay && interfaceType != E2EE {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		var p peer.PeerConfig
-		err := json.NewDecoder(r.Body).Decode(&p)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
 
-		// If addresses not assigned, choose new address dynamically.
-		var newAddrs []string
-		peerAddrs := p.GetAllowedIPs()
-		serverAddrs := config.GetAddresses()
-		if len(peerAddrs) == 0 {
-			if len(config.GetAddresses()) < 2 {
-				writeErr(w, errors.New("unable to dynamically assign addresses"))
-			}
-
-			prefix4, err := netip.ParsePrefix(serverAddrs[0].String())
-			if err != nil {
-				writeErr(w, err)
-				return
-			}
-
-			prefix6, err := netip.ParsePrefix(serverAddrs[1].String())
-			if err != nil {
-				writeErr(w, err)
-				return
-			}
-
-			zeroAddr := netip.Addr{}
-			availableAddr4 := findAvailableAddr(config, prefix4.Addr())
-			if availableAddr4 != zeroAddr {
-				prefix4, _ = availableAddr4.Prefix(availableAddr4.BitLen())
-				newAddrs = append(newAddrs, prefix4.String())
-			}
-			availableAddr6 := findAvailableAddr(config, prefix6.Addr())
-			if availableAddr6 != zeroAddr {
-				prefix6, _ = availableAddr6.Prefix(availableAddr6.BitLen())
-				newAddrs = append(newAddrs, prefix6.String())
-			}
-
-			err = p.SetAllowedIPs(newAddrs)
-			if err != nil {
-				writeErr(w, err)
-				return
-			}
+		p.UnmarshalJSON(body)
+		if err != nil {
+			writeErr(w, err)
 		}
 
-		if len(p.GetAllowedIPs()) == 0 {
+		// If addresses not assigned, error out, should have been determined from a previous API call.
+		peerAddrs := p.GetAllowedIPs()
+		if len(peerAddrs) == 0 {
 			writeErr(w, errors.New("no addresses"))
 			return
 		}
@@ -176,47 +223,135 @@ func handlePeerAdd(dev *device.Device, config *peer.Config) http.HandlerFunc {
 		fmt.Println()
 		fmt.Println(p.AsIPC())
 
+		var dev *device.Device
+		var c *peer.Config
+		switch interfaceType {
+		case Relay:
+			dev = devRelay
+			c = config.RelayConfig
+		case E2EE:
+			dev = devE2EE
+			c = config.E2EEConfig
+		}
+
+		devLock.Lock()
+		defer devLock.Unlock()
 		err = dev.IpcSet(p.AsIPC())
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
 
-		log.Printf("API: Peer Added: %s", p.GetPublicKey().String())
+		c.AddPeer(p)
 
-		body, err := json.Marshal(&p)
+		log.Printf("API: Peer Added: %s", p.GetPublicKey().String())
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// handleAllocate reserves address space for a new client or server peer to be integrated into the network.
+func handleAllocate(ns *NetworkState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		typeParam, err := strconv.Atoi(r.URL.Query().Get("type"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		peerType := peer.PeerType(typeParam)
+
+		if peerType != peer.Client && peerType != peer.Server {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		nsLock.Lock()
+		defer nsLock.Unlock()
+
+		body, err := json.Marshal(ns)
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
 
-		config.AddPeer(p)
-
 		_, err = w.Write(body)
 		if err != nil {
 			log.Printf("API Error: %v", err)
 		}
+
+		indexLock.Lock()
+		addressLock.Lock()
+		defer indexLock.Unlock()
+		defer addressLock.Unlock()
+
+		switch peer.PeerType(peerType) {
+		// Clients use Client Relay addresses and E2EE addresses.
+		case peer.Client:
+			clientAddresses[clientIndex] = *ns
+			clientIndex += 1
+
+			ns.NextClientRelayAddr4 = ns.NextClientRelayAddr4.Next()
+			ns.NextClientRelayAddr6 = ns.NextClientRelayAddr6.Next()
+			ns.NextClientE2EEAddr4 = ns.NextClientE2EEAddr4.Next()
+			ns.NextClientE2EEAddr6 = ns.NextClientE2EEAddr6.Next()
+		// IndirectServers use Server Relay addresses, E2EE addresses, and API addresses.
+		case peer.Server:
+			serverAddresses[serverIndex] = *ns
+			serverIndex += 1
+
+			ns.NextServerRelayAddr4 = ns.NextServerRelayAddr4.Next()
+			ns.NextServerRelayAddr6 = ns.NextServerRelayAddr6.Next()
+			ns.NextServerE2EEAddr4 = ns.NextServerE2EEAddr4.Next()
+			ns.NextServerE2EEAddr6 = ns.NextServerE2EEAddr6.Next()
+			ns.ApiAddr = ns.ApiAddr.Next()
+		}
 	}
 }
 
-func findAvailableAddr(config *peer.Config, baseAddr netip.Addr) netip.Addr {
-	zeroAddr := netip.Addr{}
-	candidate := baseAddr.Next()
-	// Loop until address is found or zero address hit.
-CandidateLoop:
-	for candidate != zeroAddr {
-		for _, peer := range config.GetPeers() {
-			for _, aip := range peer.GetAllowedIPs() {
-				// Already in use.
-				if netip.MustParsePrefix(aip.String()).Addr() == candidate {
-					candidate = candidate.Next()
-					continue CandidateLoop
-				}
+// handleAddAllowedIPs adds new route to a specfied peer.
+func handleAddAllowedIPs(devRelay *device.Device, config ServerConfigs) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Parse query parameters.
+		decoder := json.NewDecoder(r.Body)
+		var requestArgs AddAllowedIPsRequest
+		err := decoder.Decode(&requestArgs)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+
+		// Verify peer exists.
+		p := config.RelayConfig.GetPeer(requestArgs.PublicKey)
+		if p == nil {
+			writeErr(w, errors.New("peer not found"))
+			return
+		}
+
+		for _, ip := range requestArgs.AllowedIPs {
+			err = p.AddAllowedIPs(ip.String())
+			if err != nil {
+				writeErr(w, err)
+				return
 			}
 		}
 
-		return candidate
-	}
+		devLock.Lock()
+		defer devLock.Unlock()
+		err = devRelay.IpcSet(p.AsIPC())
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
 
-	return zeroAddr
+		w.WriteHeader(http.StatusOK)
+	}
 }

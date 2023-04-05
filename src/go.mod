@@ -1,8 +1,8 @@
 module wiretap
 
-go 1.19
+go 1.20
 
-replace golang.zx2c4.com/wireguard => github.com/luker983/wireguard-go v0.0.0-20221104205540-da3a7e2ca548
+replace golang.zx2c4.com/wireguard => github.com/luker983/wireguard-go v0.0.0-20230405143335-420d4b1d8857
 
 //replace golang.zx2c4.com/wireguard => ../custom-wireguard-go
 
@@ -12,12 +12,13 @@ require (
 	github.com/go-ping/ping v1.1.0
 	github.com/google/gopacket v1.1.19
 	github.com/libp2p/go-reuseport v0.2.0
+	github.com/m1gwings/treedrawer v0.3.3-beta
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.15.0
 	golang.org/x/net v0.7.0
 	golang.zx2c4.com/wireguard v0.0.0-20220920152132-bb719d3a6e2c
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20221104135756-97bc4ad4a1cb
-	gvisor.dev/gvisor v0.0.0-20220817001344-846276b3dbc5
+	gvisor.dev/gvisor v0.0.0-20221203005347-703fd9b7fbc0
 )
 
 require (
@@ -36,12 +37,12 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
-	golang.org/x/crypto v0.1.0 // indirect
+	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/sys v0.5.1-0.20230222185716-a3b23cc77e89 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
-	golang.zx2c4.com/wintun v0.0.0-20211104114900-415007cec224 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

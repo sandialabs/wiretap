@@ -15,55 +15,74 @@ import (
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
+	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 
 	"wiretap/peer"
 	"wiretap/transport/api"
 	"wiretap/transport/icmp"
 	"wiretap/transport/tcp"
 	"wiretap/transport/udp"
+	"wiretap/transport/userspace"
 )
 
 type serveCmdConfig struct {
-	configFile string
-	quiet      bool
-	debug      bool
-	logging    bool
-	logFile    string
+	configFile       string
+	clientAddr4E2EE  string
+	clientAddr6E2EE  string
+	clientAddr4Relay string
+	clientAddr6Relay string
+	quiet            bool
+	debug            bool
+	logging          bool
+	logFile          string
 }
 
 type wiretapDefaultConfig struct {
-	endpoint   string
-	port       int
-	allowedIPs string
-	addr4      string
-	addr6      string
-	apiAddr    string
-	keepalive  int
-	mtu        int
+	endpointRelay    string
+	endpointE2EE     string
+	port             int
+	allowedIPs       string
+	serverAddr4Relay string
+	serverAddr6Relay string
+	serverAddr4E2EE  string
+	serverAddr6E2EE  string
+	apiAddr          string
+	keepalive        int
+	mtu              int
 }
 
 // Defaults for serve command.
 var serveCmd = serveCmdConfig{
-	configFile: "",
-	quiet:      false,
-	debug:      false,
-	logging:    false,
-	logFile:    "wiretap.log",
+	configFile:       "",
+	clientAddr4E2EE:  ClientE2EESubnet4.Addr().Next().String(),
+	clientAddr6E2EE:  ClientE2EESubnet6.Addr().Next().String(),
+	clientAddr4Relay: ClientRelaySubnet4.Addr().Next().Next().String(),
+	clientAddr6Relay: ClientRelaySubnet6.Addr().Next().Next().String(),
+	quiet:            false,
+	debug:            false,
+	logging:          false,
+	logFile:          "wiretap.log",
 }
 
 var wiretapDefault = wiretapDefaultConfig{
-	endpoint:   Endpoint,
-	port:       Port,
-	allowedIPs: fmt.Sprintf("%s,%s", Subnet4.Addr().Next().Next().String()+"/32", Subnet6.Addr().Next().Next().String()+"/128"),
-	addr4:      Subnet4.Addr().Next().String() + "/32",
-	addr6:      Subnet6.Addr().Next().String() + "/128",
-	apiAddr:    ApiAddr.String(),
-	mtu:        1420,
-	keepalive:  Keepalive,
+	endpointRelay:    Endpoint,
+	endpointE2EE:     Endpoint,
+	port:             Port,
+	allowedIPs:       fmt.Sprintf("%s,%s", ClientRelaySubnet4.Addr().Next().String()+"/32", ClientRelaySubnet6.Addr().Next().String()+"/128"),
+	serverAddr4Relay: RelaySubnets4.Addr().Next().Next().String(),
+	serverAddr6Relay: RelaySubnets6.Addr().Next().Next().String(),
+	serverAddr4E2EE:  E2EESubnets4.Addr().Next().Next().String(),
+	serverAddr6E2EE:  E2EESubnets6.Addr().Next().Next().String(),
+	apiAddr:          ApiSubnets.Addr().Next().Next().String(),
+	keepalive:        Keepalive,
+	mtu:              MTU,
 }
 
 // Add serve command and set flags.
 func init() {
+	var err error
+
 	// Usage info.
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -83,62 +102,81 @@ func init() {
 	cmd.Flags().BoolVarP(&serveCmd.logging, "log", "l", serveCmd.logging, "enable logging to file")
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
 
+	cmd.Flags().StringVarP(&serveCmd.clientAddr4Relay, "ipv4-relay-client", "", serveCmd.clientAddr4Relay, "ipv4 relay address of client")
+	cmd.Flags().StringVarP(&serveCmd.clientAddr6Relay, "ipv6-relay-client", "", serveCmd.clientAddr6Relay, "ipv6 relay address of client")
+	cmd.Flags().StringVarP(&serveCmd.clientAddr4E2EE, "ipv4-e2ee-client", "", serveCmd.clientAddr4E2EE, "ipv4 e2ee address of client")
+	cmd.Flags().StringVarP(&serveCmd.clientAddr6E2EE, "ipv6-e2ee-client", "", serveCmd.clientAddr6E2EE, "ipv6 e2ee address of client")
+
 	// Quiet and debug flags must be used independently.
 	cmd.MarkFlagsMutuallyExclusive("debug", "quiet")
 
 	// Deprecated flags, kept for backwards compatibility.
-	cmd.Flags().StringP("private", "", "", "wireguard private key")
-	cmd.Flags().StringP("public", "", "", "wireguard public key of remote peer")
-	cmd.Flags().StringP("endpoint", "e", wiretapDefault.endpoint, "socket address of remote peer that server will connect to (example \"1.2.3.4:51820\")")
+	cmd.Flags().StringP("private-relay", "", "", "wireguard private key for relay interface")
+	cmd.Flags().StringP("public-relay", "", "", "wireguard public key of remote peer for relay interface")
+	cmd.Flags().StringP("private-e2ee", "", "", "wireguard private key for E2EE interface")
+	cmd.Flags().StringP("public-e2ee", "", "", "wireguard public key of remote peer for E2EE interface")
+	cmd.Flags().StringP("endpoint-relay", "", wiretapDefault.endpointRelay, "socket address of remote peer that server will connect to (example \"1.2.3.4:51820\")")
+	cmd.Flags().StringP("endpoint-e2ee", "", wiretapDefault.endpointE2EE, "socket address of remote peer's e2ee interface that server will connect to (example \"1.2.3.4:51820\")")
 	cmd.Flags().IntP("port", "p", wiretapDefault.port, "wireguard listener port")
 	cmd.Flags().StringP("allowed", "a", wiretapDefault.allowedIPs, "comma-separated list of CIDR IP ranges to associate with peer")
-	cmd.Flags().StringP("ipv4", "4", wiretapDefault.addr4, "virtual ipv4 address of wireguard interface")
-	cmd.Flags().StringP("ipv6", "6", wiretapDefault.addr6, "virtual ipv6 address of wireguard interface")
+	cmd.Flags().StringP("ipv4-relay", "", wiretapDefault.serverAddr4Relay, "ipv4 relay address")
+	cmd.Flags().StringP("ipv6-relay", "", wiretapDefault.serverAddr6Relay, "ipv6 relay address")
+	cmd.Flags().StringP("ipv4-e2ee", "", wiretapDefault.serverAddr4E2EE, "ipv4 e2ee address")
+	cmd.Flags().StringP("ipv6-e2ee", "", wiretapDefault.serverAddr6E2EE, "ipv6 e2ee address")
 	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
 	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
 	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
 
 	// Bind deprecated flags to viper.
-	if err := viper.BindPFlag("Interface.privatekey", cmd.Flags().Lookup("private")); err != nil {
-		check("error binding privatekey flag to viper", err)
-	}
-	if err := viper.BindPFlag("Interface.port", cmd.Flags().Lookup("port")); err != nil {
-		check("error binding port flag to viper", err)
-	}
-	if err := viper.BindPFlag("Interface.ipv4", cmd.Flags().Lookup("ipv4")); err != nil {
-		check("error binding ipv4 flag to viper", err)
-	}
-	if err := viper.BindPFlag("Interface.ipv6", cmd.Flags().Lookup("ipv6")); err != nil {
-		check("error binding ipv6 flag to viper", err)
-	}
-	if err := viper.BindPFlag("Interface.api", cmd.Flags().Lookup("api")); err != nil {
-		check("error binding api flag to viper", err)
-	}
-	if err := viper.BindPFlag("Interface.mtu", cmd.Flags().Lookup("mtu")); err != nil {
-		check("error binding mtu flag to viper", err)
-	}
-	if err := viper.BindPFlag("Peer.publickey", cmd.Flags().Lookup("public")); err != nil {
-		check("error binding publickey flag to viper", err)
-	}
-	if err := viper.BindPFlag("Peer.endpoint", cmd.Flags().Lookup("endpoint")); err != nil {
-		check("error binding endpoint flag to viper", err)
-	}
-	if err := viper.BindPFlag("Peer.allowed", cmd.Flags().Lookup("allowed")); err != nil {
-		check("error binding allowed flag to viper", err)
-	}
-	if err := viper.BindPFlag("Peer.keepalive", cmd.Flags().Lookup("keepalive")); err != nil {
-		check("error binding keepalive flag to viper", err)
-	}
+	err = viper.BindPFlag("Relay.Interface.privatekey", cmd.Flags().Lookup("private-relay"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("Relay.Interface.port", cmd.Flags().Lookup("port"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("Relay.Interface.ipv4", cmd.Flags().Lookup("ipv4-relay"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("Relay.Interface.ipv6", cmd.Flags().Lookup("ipv6-relay"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("Relay.Interface.mtu", cmd.Flags().Lookup("mtu"))
+	check("error binding flag to viper", err)
+
+	err = viper.BindPFlag("Relay.Peer.publickey", cmd.Flags().Lookup("public-relay"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("Relay.Peer.endpoint", cmd.Flags().Lookup("endpoint-relay"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("Relay.Peer.allowed", cmd.Flags().Lookup("allowed"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("Relay.Peer.keepalive", cmd.Flags().Lookup("keepalive"))
+	check("error binding flag to viper", err)
+
+	err = viper.BindPFlag("E2EE.Interface.privatekey", cmd.Flags().Lookup("private-e2ee"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("E2EE.Interface.ipv4", cmd.Flags().Lookup("ipv4-e2ee"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("E2EE.Interface.ipv6", cmd.Flags().Lookup("ipv6-e2ee"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("E2EE.Interface.api", cmd.Flags().Lookup("api"))
+	check("error binding flag to viper", err)
+
+	err = viper.BindPFlag("E2EE.Peer.publickey", cmd.Flags().Lookup("public-e2ee"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("E2EE.Peer.endpoint", cmd.Flags().Lookup("endpoint-e2ee"))
+	check("error binding flag to viper", err)
 
 	// Set default values for viper.
-	viper.SetDefault("Interface.port", wiretapDefault.port)
-	viper.SetDefault("Interface.ipv4", wiretapDefault.addr4)
-	viper.SetDefault("Interface.ipv6", wiretapDefault.addr6)
-	viper.SetDefault("Interface.api", wiretapDefault.apiAddr)
-	viper.SetDefault("Interface.mtu", wiretapDefault.mtu)
-	viper.SetDefault("Peer.endpoint", wiretapDefault.endpoint)
-	viper.SetDefault("Peer.allowed", wiretapDefault.allowedIPs)
-	viper.SetDefault("Peer.keepalive", wiretapDefault.keepalive)
+	viper.SetDefault("Relay.Interface.port", wiretapDefault.port)
+	viper.SetDefault("Relay.Interface.ipv4", wiretapDefault.serverAddr4Relay)
+	viper.SetDefault("Relay.Interface.ipv6", wiretapDefault.serverAddr6Relay)
+	viper.SetDefault("Relay.Interface.mtu", wiretapDefault.mtu)
+
+	viper.SetDefault("Relay.Interface.Peer.endpoint", wiretapDefault.endpointRelay)
+	viper.SetDefault("Relay.Interface.Peer.allowed", wiretapDefault.allowedIPs)
+	viper.SetDefault("Relay.Interface.Peer.keepalive", wiretapDefault.keepalive)
+
+	viper.SetDefault("E2EE.Interface.ipv4", wiretapDefault.serverAddr4E2EE)
+	viper.SetDefault("E2EE.Interface.ipv6", wiretapDefault.serverAddr6E2EE)
+	viper.SetDefault("E2EE.Interface.api", wiretapDefault.apiAddr)
+
+	viper.SetDefault("E2EE.Peer.endpoint", wiretapDefault.endpointE2EE)
 
 	cmd.Flags().SortFlags = false
 
@@ -146,7 +184,7 @@ func init() {
 	helpFunc := cmd.HelpFunc()
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
-			for _, f := range []string{"private", "public", "endpoint", "port", "allowed", "ipv4", "ipv6", "api", "keepalive", "mtu", "log", "log-file"} {
+			for _, f := range []string{"ipv4-relay-client", "ipv6-relay-client", "ipv4-e2ee-client", "ipv6-e2ee-client", "private-relay", "public-relay", "private-e2ee", "public-e2ee", "endpoint-relay", "endpoint-e2ee", "port", "allowed", "ipv4-relay", "ipv6-relay", "ipv4-e2ee", "ipv6-e2ee", "api", "keepalive", "mtu"} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
 					fmt.Printf("Failed to hide flag %v: %v\n", f, err)
@@ -198,57 +236,105 @@ func (c serveCmdConfig) Run() {
 	}
 
 	// Check for required flags.
-	if !viper.IsSet("Peer.publickey") {
+	if !viper.IsSet("Relay.Peer.publickey") || !viper.IsSet("E2EE.Peer.publickey") {
 		check("config error", errors.New("public key of peer is required"))
 	}
 
-	configArgs := peer.ConfigArgs{
-		PrivateKey: viper.GetString("Interface.privatekey"),
-		ListenPort: viper.GetInt("Interface.port"),
+	configRelayArgs := peer.ConfigArgs{
+		PrivateKey: viper.GetString("Relay.Interface.privatekey"),
+		ListenPort: viper.GetInt("Relay.Interface.port"),
 		Peers: []peer.PeerConfigArgs{
 			{
-				PublicKey:                   viper.GetString("Peer.publickey"),
-				Endpoint:                    viper.GetString("Peer.endpoint"),
-				PersistentKeepaliveInterval: viper.GetInt("Peer.keepalive"),
-				AllowedIPs:                  strings.Split(viper.GetString("Peer.allowed"), ","),
+				PublicKey: viper.GetString("Relay.Peer.publickey"),
+				Endpoint:  viper.GetString("Relay.Peer.endpoint"),
+				PersistentKeepaliveInterval: func() int {
+					if len(viper.GetString("Relay.Peer.endpoint")) > 0 {
+						return viper.GetInt("Relay.Peer.keepalive")
+					} else {
+						return 0
+					}
+				}(),
+				AllowedIPs: strings.Split(viper.GetString("Relay.Peer.allowed"), ","),
 			},
 		},
-		Addresses: []string{viper.GetString("Interface.ipv4"), viper.GetString("Interface.ipv6")},
+		Addresses: []string{viper.GetString("Relay.Interface.ipv4") + "/32", viper.GetString("Relay.Interface.ipv6") + "/128"},
 	}
 
-	config, err := peer.GetConfig(configArgs)
-	check("failed to make configuration", err)
+	configRelay, err := peer.GetConfig(configRelayArgs)
+	check("failed to make relay configuration", err)
+
+	configE2EEArgs := peer.ConfigArgs{
+		PrivateKey: viper.GetString("E2EE.Interface.privatekey"),
+		ListenPort: E2EEPort,
+		Peers: []peer.PeerConfigArgs{
+			{
+				PublicKey:  viper.GetString("E2EE.Peer.publickey"),
+				Endpoint:   viper.GetString("E2EE.Peer.endpoint"),
+				AllowedIPs: []string{c.clientAddr4E2EE + "/32", c.clientAddr6E2EE + "/128"},
+			},
+		},
+		Addresses: []string{viper.GetString("E2EE.Interface.ipv4") + "/32", viper.GetString("E2EE.Interface.ipv6") + "/128", viper.GetString("E2EE.Interface.api") + "/128"},
+	}
+	configE2EE, err := peer.GetConfig(configE2EEArgs)
+	check("failed to make relay configuration", err)
 
 	// Print public key for easier configuration.
 	fmt.Println()
-	fmt.Println("If needed, add this peer to your WireGuard configuration.")
-	fmt.Println()
+	fmt.Println("Relay configuration:")
 	fmt.Println(strings.Repeat("─", 32))
-	fmt.Print(config.AsShareableFile())
+	fmt.Print(configRelay.AsShareableFile())
+	fmt.Println(strings.Repeat("─", 32))
+	fmt.Println()
+	fmt.Println("E2EE configuration:")
+	fmt.Println(strings.Repeat("─", 32))
+	fmt.Print(configE2EE.AsShareableFile())
 	fmt.Println(strings.Repeat("─", 32))
 	fmt.Println()
 
-	// Create virtual interface with this address and MTU.
-	ipv4Prefix, err := netip.ParsePrefix(viper.GetString("Interface.ipv4"))
+	// Create virtual relay interface with this address and MTU.
+	ipv4Addr, err := netip.ParseAddr(viper.GetString("Relay.Interface.ipv4"))
 	check("failed to parse ipv4 address", err)
-	ipv4Addr := ipv4Prefix.Addr()
 
-	ipv6Prefix, err := netip.ParsePrefix(viper.GetString("Interface.ipv6"))
+	ipv6Addr, err := netip.ParseAddr(viper.GetString("Relay.Interface.ipv6"))
 	check("failed to parse ipv6 address", err)
-	ipv6Addr := ipv6Prefix.Addr()
 
-	apiPrefix, err := netip.ParsePrefix(viper.GetString("Interface.api"))
+	fmt.Println(ipv4Addr, ipv6Addr, "for relay")
+	tunRelay, tnetRelay, err := netstack.CreateNetTUN(
+		[]netip.Addr{ipv4Addr, ipv6Addr},
+		[]netip.Addr{},
+		viper.GetInt("Relay.Interface.mtu"),
+	)
+	check("failed to create relay TUN", err)
+
+	// Enable forwarding for Relay NICs
+	s := tnetRelay.Stack()
+	tcpipErr := s.SetForwardingDefaultAndAllNICs(ipv4.ProtocolNumber, true)
+	if tcpipErr != nil {
+		check("failed to enable forwarding", errors.New(tcpipErr.String()))
+	}
+	tcpipErr = s.SetForwardingDefaultAndAllNICs(ipv6.ProtocolNumber, true)
+	if tcpipErr != nil {
+		check("failed to enable forwarding", errors.New(tcpipErr.String()))
+	}
+
+	// Create virtual e2ee interface with this address and MTU - 80.
+	ipv4Addr, err = netip.ParseAddr(viper.GetString("E2EE.Interface.ipv4"))
+	check("failed to parse ipv4 address", err)
+
+	ipv6Addr, err = netip.ParseAddr(viper.GetString("E2EE.Interface.ipv6"))
+	check("failed to parse ipv6 address", err)
+
+	apiAddr, err := netip.ParseAddr(viper.GetString("E2EE.Interface.api"))
 	check("failed to parse API address", err)
-	apiAddr := apiPrefix.Addr()
 
-	tun, tnet, err := netstack.CreateNetTUN(
+	fmt.Println(ipv4Addr, ipv6Addr, apiAddr, "for relay")
+	tunE2EE, tnetE2EE, err := netstack.CreateNetTUN(
 		[]netip.Addr{ipv4Addr, ipv6Addr, apiAddr},
 		[]netip.Addr{},
-		viper.GetInt("Interface.mtu"),
+		viper.GetInt("Relay.Interface.mtu")-80,
 	)
-	check("failed to create TUN", err)
+	check("failed to create E2EE TUN", err)
 
-	// Make new device.
 	var logger int
 	if c.debug {
 		logger = device.LogLevelVerbose
@@ -257,43 +343,64 @@ func (c serveCmdConfig) Run() {
 	} else {
 		logger = device.LogLevelError
 	}
-	dev := device.NewDevice(tun, conn.NewDefaultBind(), device.NewLogger(logger, ""))
+
+	// Make new relay device.
+	devRelay := device.NewDevice(tunRelay, conn.NewDefaultBind(), device.NewLogger(logger, ""))
+	// Configure wireguard.
+	fmt.Println(configRelay.AsIPC())
+	err = devRelay.IpcSet(configRelay.AsIPC())
+	check("failed to configure relay wireguard device", err)
+	err = devRelay.Up()
+	check("failed to bring up relay device", err)
+
+	// Make new e2ee device, bind to relay device's userspace networking stack.
+	devE2EE := device.NewDevice(tunE2EE, userspace.NewBind(tnetRelay), device.NewLogger(logger, ""))
 
 	// Configure wireguard.
-	fmt.Println(config.AsIPC())
-	err = dev.IpcSet(config.AsIPC())
-	check("failed to configure wireguard device", err)
+	fmt.Println(configE2EE.AsIPC())
+	err = devE2EE.IpcSet(configE2EE.AsIPC())
+	check("failed to configure e2ee wireguard device", err)
+	err = devE2EE.Up()
+	check("failed to bring up e2ee device", err)
 
-	err = dev.Up()
-	check("failed to bring up device", err)
-
-	// Start transport layer handlers.
+	// Start transport layer handlers under the e2ee device.
 	wg.Add(1)
 	lock.Lock()
 	go func() {
-		tcp.Handle(tnet, ipv4Addr, ipv6Addr, 1337, &lock)
+		tcp.Handle(tnetE2EE, ipv4Addr, ipv6Addr, 1337, &lock)
 		wg.Done()
 	}()
 
 	lock.Lock()
 	wg.Add(1)
 	go func() {
-		udp.Handle(tnet, ipv4Addr, ipv6Addr, 1337, &lock)
+		udp.Handle(tnetE2EE, ipv4Addr, ipv6Addr, 1337, &lock)
 		wg.Done()
 	}()
 
 	lock.Lock()
 	wg.Add(1)
 	go func() {
-		icmp.Handle(tnet, &lock)
+		icmp.Handle(tnetE2EE, &lock)
 		wg.Done()
 	}()
 
 	// Start API handler. Starting last because firewall rule needs to be first.
+	ns := api.NetworkState{
+		NextClientRelayAddr4: netip.MustParseAddr(c.clientAddr4Relay),
+		NextClientRelayAddr6: netip.MustParseAddr(c.clientAddr6Relay),
+		NextServerRelayAddr4: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv4")),
+		NextServerRelayAddr6: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv6")),
+		NextClientE2EEAddr4:  netip.MustParseAddr(c.clientAddr4E2EE),
+		NextClientE2EEAddr6:  netip.MustParseAddr(c.clientAddr6E2EE),
+		NextServerE2EEAddr4:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv4")),
+		NextServerE2EEAddr6:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv6")),
+		ApiAddr:              netip.MustParseAddr(viper.GetString("E2EE.Interface.api")),
+	}
 	lock.Lock()
 	wg.Add(1)
 	go func() {
-		api.Handle(tnet, dev, &config, apiAddr, uint16(ApiPort), &lock)
+		api.Handle(tnetE2EE, devRelay, devE2EE, &configRelay, &configE2EE, apiAddr, uint16(ApiPort), &lock, &ns)
 		wg.Done()
 	}()
 
