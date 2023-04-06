@@ -13,17 +13,29 @@ import (
 
 // Defaults shared by multiple commands.
 var (
-	Version      = "v0.0.0"
-	Endpoint     = ""
-	Port         = 51820
-	Config       = "wiretap.conf"
-	ServerConfig = "wiretap_server.conf"
-	Keepalive    = 25
-	ShowHidden   = false
-	ApiAddr      = netip.MustParsePrefix("a::/128")
-	ApiPort      = 80
-	Subnet4      = netip.MustParsePrefix("192.168.0.0/24")
-	Subnet6      = netip.MustParsePrefix("fd::/64")
+	Version            = "v0.0.0"
+	Endpoint           = ""
+	Port               = 51820
+	E2EEPort           = 51821
+	ConfigRelay        = "wiretap_relay.conf"
+	ConfigE2EE         = "wiretap_e2ee.conf"
+	ConfigServer       = "wiretap_server.conf"
+	Keepalive          = 25
+	MTU                = 1420
+	ShowHidden         = false
+	ApiSubnets         = netip.MustParsePrefix("::/8")
+	ApiPort            = 80
+	ClientRelaySubnet4 = netip.MustParsePrefix("172.16.0.0/16")
+	ClientRelaySubnet6 = netip.MustParsePrefix("fd:16::/40")
+	RelaySubnets4      = netip.MustParsePrefix("172.17.0.0/16")
+	RelaySubnets6      = netip.MustParsePrefix("fd:17::/40")
+	E2EESubnets4       = netip.MustParsePrefix("172.18.0.0/16")
+	E2EESubnets6       = netip.MustParsePrefix("fd:18::/40")
+	ClientE2EESubnet4  = netip.MustParsePrefix("172.19.0.0/16")
+	ClientE2EESubnet6  = netip.MustParsePrefix("fd:19::/40")
+	SubnetV4Bits       = 24
+	SubnetV6Bits       = 48
+	APIBits            = 16
 )
 
 // Define colors.

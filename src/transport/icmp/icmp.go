@@ -25,14 +25,14 @@ import (
 // preroutingMatch matches packets in the prerouting stage and clones:
 // packet into channel for processing.
 type preroutingMatch struct {
-	pktChan chan *stack.PacketBuffer
+	pktChan chan stack.PacketBufferPtr
 }
 
 var pinger Ping = nil
 
 // When a new ICMP message hits the prerouting stage, the packet is cloned
 // to the ICMP handler and dropped here.
-func (m preroutingMatch) Match(hook stack.Hook, packet *stack.PacketBuffer, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool) {
+func (m preroutingMatch) Match(hook stack.Hook, packet stack.PacketBufferPtr, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool) {
 	if hook == stack.Prerouting {
 		m.pktChan <- packet.Clone()
 		return false, true
@@ -58,7 +58,7 @@ func Handle(tnet *netstack.Net, lock *sync.Mutex) {
 	}
 
 	match := preroutingMatch{
-		pktChan: make(chan *stack.PacketBuffer),
+		pktChan: make(chan stack.PacketBufferPtr),
 	}
 
 	rule4 := stack.Rule{
@@ -93,7 +93,7 @@ func Handle(tnet *netstack.Net, lock *sync.Mutex) {
 }
 
 // handleICMPMessage parses ICMP packets and proxies them if possible.
-func handleMessage(s *stack.Stack, packet *stack.PacketBuffer) {
+func handleMessage(s *stack.Stack, packet stack.PacketBufferPtr) {
 	// Parse ICMP packet type.
 	netHeader := packet.Network()
 	log.Printf("(client %v) - Transport: ICMP -> %v", netHeader.SourceAddress(), netHeader.DestinationAddress())
@@ -121,7 +121,7 @@ func handleMessage(s *stack.Stack, packet *stack.PacketBuffer) {
 
 // handleICMPEcho tries to send ICMP echo requests to the true destination however it can.
 // If successful, it sends an echo response to the peer.
-func handleEcho(s *stack.Stack, packet *stack.PacketBuffer) {
+func handleEcho(s *stack.Stack, packet stack.PacketBufferPtr) {
 	var success bool
 	var err error
 
@@ -146,7 +146,7 @@ func handleEcho(s *stack.Stack, packet *stack.PacketBuffer) {
 }
 
 // sendICMPEchoResponse sends an echo response to the peer with a spoofed source address.
-func sendEchoResponse(s *stack.Stack, packet *stack.PacketBuffer) {
+func sendEchoResponse(s *stack.Stack, packet stack.PacketBufferPtr) {
 	var response []byte
 	var ipHeader []byte
 	var err error

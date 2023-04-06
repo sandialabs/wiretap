@@ -18,6 +18,7 @@ import (
 	netipv6 "golang.org/x/net/ipv6"
 
 	"golang.zx2c4.com/wireguard/tun/netstack"
+	"gvisor.dev/gvisor/pkg/bufferv2"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
@@ -44,7 +45,7 @@ var sourceMap = make(map[netip.AddrPort]dialerCount)
 var sourceMapLock = sync.RWMutex{}
 
 // source and destination -> dialer
-var connMap = make(map[udpConn](chan *stack.PacketBuffer))
+var connMap = make(map[udpConn](chan stack.PacketBufferPtr))
 var connMapLock = sync.RWMutex{}
 
 // preroutingMatch matches packets in the prerouting stage.
@@ -53,7 +54,7 @@ type preroutingMatch struct{}
 var s *stack.Stack
 
 // Match rejects all packets, but clones every prerouting packet to the packet handler.
-func (m preroutingMatch) Match(hook stack.Hook, packet *stack.PacketBuffer, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool) {
+func (m preroutingMatch) Match(hook stack.Hook, packet stack.PacketBufferPtr, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool) {
 	if hook == stack.Prerouting {
 		packetClone := packet.Clone()
 		go func() {
@@ -102,7 +103,7 @@ func sourceMapDecrement(n netip.AddrPort) {
 	sourceMapLock.Unlock()
 }
 
-func connMapWrite(c udpConn, pktChan chan *stack.PacketBuffer) {
+func connMapWrite(c udpConn, pktChan chan stack.PacketBufferPtr) {
 	connMapLock.Lock()
 	connMap[c] = pktChan
 	connMapLock.Unlock()
@@ -114,7 +115,7 @@ func connMapDelete(c udpConn) {
 	connMapLock.Unlock()
 }
 
-func connMapLookup(c udpConn) (chan *stack.PacketBuffer, bool) {
+func connMapLookup(c udpConn) (chan stack.PacketBufferPtr, bool) {
 	connMapLock.RLock()
 	pktChan, ok := connMap[c]
 	connMapLock.RUnlock()
@@ -122,14 +123,14 @@ func connMapLookup(c udpConn) (chan *stack.PacketBuffer, bool) {
 	return pktChan, ok
 }
 
-func getDataFromPacket(packet *stack.PacketBuffer) []byte {
+func getDataFromPacket(packet stack.PacketBufferPtr) []byte {
 	netHeader := packet.Network()
 	transHeader := header.UDP(netHeader.Payload())
 	return transHeader.Payload()
 }
 
 // NewPacket handles every new packet and sending it to the proper UDP dialer.
-func newPacket(packet *stack.PacketBuffer) {
+func newPacket(packet stack.PacketBufferPtr) {
 	netHeader := packet.Network()
 	transHeader := header.UDP(netHeader.Payload())
 
@@ -138,7 +139,7 @@ func newPacket(packet *stack.PacketBuffer) {
 
 	log.Printf("(client %v) - Transport: UDP -> %v", source, dest)
 
-	var pktChan chan *stack.PacketBuffer
+	var pktChan chan stack.PacketBufferPtr
 	var ok bool
 
 	conn := udpConn{Source: source, Dest: dest}
@@ -158,7 +159,7 @@ func newPacket(packet *stack.PacketBuffer) {
 	}
 
 	// New packet channel and dialer need to be created.
-	pktChan = make(chan *stack.PacketBuffer, 1)
+	pktChan = make(chan stack.PacketBufferPtr, 1)
 	connMapWrite(conn, pktChan)
 
 	go handleConn(conn, port)
@@ -215,7 +216,7 @@ func handleConn(conn udpConn, port int) {
 		connMapDelete(conn)
 	}()
 
-	var mostRecentPacket *stack.PacketBuffer
+	var mostRecentPacket stack.PacketBufferPtr
 
 	// New dialer from source to destination.
 	laddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", port))
@@ -256,8 +257,8 @@ func handleConn(conn udpConn, port int) {
 		for {
 			pktChan, _ := connMapLookup(conn)
 			pkt := <-pktChan
-			// Exit if packet is nil, other goroutine wants us to close.
-			if pkt == nil {
+			// Exit if packet is empty, other goroutine wants us to close.
+			if pkt.IsNil() {
 				return
 			}
 
@@ -295,11 +296,15 @@ func handleConn(conn udpConn, port int) {
 				}
 			}
 
-			// Force closing of goroutine by reinjecting buffer.
+			// Force closing of goroutine by reinjecting buffer (DecRef() to make nil pointer)
 			newConn.Close()
 			pktChan, ok := connMapLookup(conn)
 			if ok {
-				pktChan <- nil
+				nilPkt := stack.NewPacketBuffer(stack.PacketBufferOptions{
+					Payload: bufferv2.MakeWithData([]byte{}),
+				})
+				nilPkt.DecRef()
+				pktChan <- nilPkt
 			}
 			return
 		}
@@ -389,7 +394,7 @@ func sendResponse(conn udpConn, data []byte) {
 
 // sendUnreachable sends an ICMP Port Unreachable packet to peer as if from
 // the original destination of the packet.
-func sendUnreachable(packet *stack.PacketBuffer) {
+func sendUnreachable(packet stack.PacketBufferPtr) {
 	var err error
 	var ipv4Layer *layers.IPv4
 	var ipv6Layer *layers.IPv6
