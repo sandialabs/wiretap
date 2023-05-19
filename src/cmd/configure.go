@@ -22,6 +22,7 @@ type configureCmdConfig struct {
 	configFileE2EE   string
 	configFileServer string
 	writeToClipboard bool
+	simple           bool
 	clientAddr4Relay string
 	clientAddr6Relay string
 	clientAddr4E2EE  string
@@ -44,6 +45,7 @@ var configureCmdArgs = configureCmdConfig{
 	configFileE2EE:   ConfigE2EE,
 	configFileServer: ConfigServer,
 	writeToClipboard: false,
+	simple:           false,
 	clientAddr4Relay: ClientRelaySubnet4.Addr().Next().String() + "/32",
 	clientAddr6Relay: ClientRelaySubnet6.Addr().Next().String() + "/128",
 	clientAddr4E2EE:  ClientE2EESubnet4.Addr().Next().String() + "/32",
@@ -77,6 +79,7 @@ func init() {
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileE2EE, "e2ee-output", "", configureCmdArgs.configFileE2EE, "wireguard E2EE config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileServer, "server-output", "s", configureCmdArgs.configFileServer, "wiretap server config output filename")
 	configureCmd.Flags().BoolVarP(&configureCmdArgs.writeToClipboard, "clipboard", "c", configureCmdArgs.writeToClipboard, "copy configuration args to clipboard")
+	configureCmd.Flags().BoolVarP(&configureCmdArgs.simple, "simple", "", configureCmdArgs.simple, "disable multihop and multiclient features for a simpler setup")
 
 	configureCmd.Flags().StringVarP(&configureCmdArgs.apiAddr, "api", "0", configureCmdArgs.apiAddr, "address of server API service")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.clientAddr4Relay, "ipv4-relay", "", configureCmdArgs.clientAddr4Relay, "ipv4 relay address")
@@ -138,8 +141,14 @@ func (c configureCmdConfig) Run() {
 		ListenPort: c.port,
 		Peers: []peer.PeerConfigArgs{
 			{
-				PublicKey:  serverConfigRelay.GetPublicKey(),
-				AllowedIPs: []string{relaySubnet4.String(), relaySubnet6.String()},
+				PublicKey: serverConfigRelay.GetPublicKey(),
+				AllowedIPs: func() []string {
+					if c.simple {
+						return c.allowedIPs
+					} else {
+						return []string{relaySubnet4.String(), relaySubnet6.String()}
+					}
+				}(),
 				Endpoint: func() string {
 					if c.outbound {
 						return c.endpoint
@@ -217,11 +226,13 @@ func (c configureCmdConfig) Run() {
 
 	// Write config file and get status string.
 	var fileStatusE2EE string
-	err = os.WriteFile(c.configFileE2EE, []byte(clientConfigE2EE.AsFile()), 0600)
-	if err != nil {
-		fileStatusE2EE = fmt.Sprintf("%s %s", RedBold("config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
-	} else {
-		fileStatusE2EE = fmt.Sprintf("%s %s", GreenBold("config:"), Green(c.configFileE2EE))
+	if !c.simple {
+		err = os.WriteFile(c.configFileE2EE, []byte(clientConfigE2EE.AsFile()), 0600)
+		if err != nil {
+			fileStatusE2EE = fmt.Sprintf("%s %s", RedBold("config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
+		} else {
+			fileStatusE2EE = fmt.Sprintf("%s %s", GreenBold("config:"), Green(c.configFileE2EE))
+		}
 	}
 
 	// Write server config file and get status string.
@@ -233,10 +244,16 @@ func (c configureCmdConfig) Run() {
 		fileStatusServer = fmt.Sprintf("%s %s", GreenBold("server config:"), Green(c.configFileServer))
 	}
 
+	// Make config file string
+	serverConfigFile := fmt.Sprintf("./wiretap serve -f %s", c.configFileServer)
+	if c.simple {
+		serverConfigFile = fmt.Sprintf("%s --simple", serverConfigFile)
+	}
+
 	// Copy to clipboard if requested.
 	var clipboardStatus string
 	if c.writeToClipboard {
-		err = clipboard.WriteAll(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, "POSIX"))
+		err = clipboard.WriteAll(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple))
 		if err != nil {
 			clipboardStatus = fmt.Sprintf("%s %s", RedBold("clipboard:"), Red(fmt.Sprintf("error copying to clipboard: %v", err)))
 		} else {
@@ -247,24 +264,26 @@ func (c configureCmdConfig) Run() {
 	// Write and format output.
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, "Configurations successfully generated.")
-	fmt.Fprintln(color.Output, "Import the two configs into WireGuard locally and pass the arguments below to Wiretap on the remote machine.")
+	fmt.Fprintln(color.Output, "Import the config(s) into WireGuard locally and pass the arguments below to Wiretap on the remote machine.")
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, fileStatusRelay)
 	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
 	fmt.Fprint(color.Output, WhiteBold(clientConfigRelay.AsFile()))
 	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
 	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, fileStatusE2EE)
-	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-	fmt.Fprint(color.Output, WhiteBold(clientConfigE2EE.AsFile()))
-	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-	fmt.Fprintln(color.Output)
+	if !c.simple {
+		fmt.Fprintln(color.Output, fileStatusE2EE)
+		fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+		fmt.Fprint(color.Output, WhiteBold(clientConfigE2EE.AsFile()))
+		fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+		fmt.Fprintln(color.Output)
+	}
 	fmt.Fprintln(color.Output, fileStatusServer)
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, GreenBold("server command:"))
-	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, "POSIX")))
-	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, "POWERSHELL")))
-	fmt.Fprintln(color.Output, Cyan("Config File: "), Green("./wiretap serve -f "+c.configFileServer))
+	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple)))
+	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, c.simple)))
+	fmt.Fprintln(color.Output, Cyan("Config File: "), Green(serverConfigFile))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {
 		fmt.Fprintln(color.Output, clipboardStatus)

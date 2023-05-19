@@ -103,7 +103,7 @@ Config File:  ./wiretap serve -f wiretap_server.conf
 ```
 
 > **Note**
-> Wiretap uses 2 WireGuard interfaces per node in order to safely and scalably chain together servers. This means your client will bind to more than one port, but only the Relay Interface port needs to be accessible by the Server. See the [How It Works](#how-it-works) section for details
+> Wiretap uses 2 WireGuard interfaces per node in order to safely and scalably chain together servers. This means your client will bind to more than one port, but only the Relay Interface port needs to be accessible by the Server. See the [How It Works](#how-it-works) section for details. Use `--simple` if your setup requires a single interface on the client
 
 Install the resulting config either by copying and pasting the output or by importing the new `wiretap_relay.conf` and `wiretap_e2ee.conf` files into WireGuard:
 

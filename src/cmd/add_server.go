@@ -320,7 +320,7 @@ func (c addServerCmdConfig) Run() {
 	// Copy to clipboard if requested.
 	var clipboardStatus string
 	if c.writeToClipboard {
-		err = clipboard.WriteAll(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, "POSIX"))
+		err = clipboard.WriteAll(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false))
 		if err != nil {
 			clipboardStatus = fmt.Sprintf("%s %s", RedBold("clipboard:"), Red(fmt.Sprintf("error copying to clipboard: %v", err)))
 		} else {
@@ -347,8 +347,8 @@ func (c addServerCmdConfig) Run() {
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, fileStatusServer)
 	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, "POSIX")))
-	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, "POWERSHELL")))
+	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false)))
+	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, false)))
 	fmt.Fprintln(color.Output, Cyan("Config File: "), Green("./wiretap serve -f "+c.configFileServer))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {
