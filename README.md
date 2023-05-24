@@ -54,6 +54,10 @@ On the client machine, run Wiretap in configure mode to build a config
 ./wiretap configure --port <port> --endpoint <socket> --routes <routes>
 ```
 
+* `--port` sets the listening port of the Client's Relay interface. It's set to 51820 by default. Note that the E2EE listening port does not need to be accessible to the Server
+* `--endpoint` tells the Server how to connect to the Client's Relay interface (the E2EE interfaces already know how to talk to each other if the Relay interfaces are working)
+* `--routes` is the equivalent of WireGuard's AllowedIPs setting. This tells the Client to route traffic that matches these IP ranges through Wiretap
+
 Following the example in the diagram:
 ```bash
 ./wiretap configure --port 1337 --endpoint 1.3.3.7:1337 --routes 10.0.0.0/24
@@ -99,7 +103,7 @@ Config File:  ./wiretap serve -f wiretap_server.conf
 ```
 
 > **Note**
-> Wiretap uses 2 WireGuard interfaces per node in order to safely and scalably chain together servers. See the [How It Works](#how-it-works) section for details
+> Wiretap uses 2 WireGuard interfaces per node in order to safely and scalably chain together servers. This means your client will bind to more than one port, but only the Relay Interface port needs to be accessible by the Server. See the [How It Works](#how-it-works) section for details. Use `--simple` if your setup requires a single interface on the client
 
 Install the resulting config either by copying and pasting the output or by importing the new `wiretap_relay.conf` and `wiretap_e2ee.conf` files into WireGuard:
 

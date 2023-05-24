@@ -37,6 +37,13 @@ type ConfigArgs struct {
 	Addresses    []string
 }
 
+type Shell uint
+
+const (
+	POSIX Shell = iota
+	PowerShell
+)
+
 func GetConfig(args ConfigArgs) (Config, error) {
 	c, err := NewConfig()
 	if err != nil {
@@ -412,7 +419,7 @@ func (c *Config) AsIPC() string {
 	return s.String()
 }
 
-func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell string) string {
+func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, simple bool) string {
 	var s strings.Builder
 	var keys []string
 	var vals []string
@@ -458,31 +465,36 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell string) st
 		vals = append(vals, relayConfig.GetPeerEndpoint(0))
 	}
 
-	// E2EE Interface.
-	keys = append(keys, "WIRETAP_E2EE_INTERFACE_PRIVATEKEY")
-	vals = append(vals, e2eeConfig.GetPrivateKey())
+	if !simple {
+		// E2EE Interface.
+		keys = append(keys, "WIRETAP_E2EE_INTERFACE_PRIVATEKEY")
+		vals = append(vals, e2eeConfig.GetPrivateKey())
 
-	if len(e2eeConfig.addresses) == 1 {
-		keys = append(keys, "WIRETAP_E2EE_INTERFACE_API")
-		vals = append(vals, e2eeConfig.addresses[0].IP.String())
-	}
+		if len(e2eeConfig.addresses) == 1 {
+			keys = append(keys, "WIRETAP_E2EE_INTERFACE_API")
+			vals = append(vals, e2eeConfig.addresses[0].IP.String())
+		}
 
-	// E2EE Peer.
-	keys = append(keys, "WIRETAP_E2EE_PEER_PUBLICKEY")
-	vals = append(vals, e2eeConfig.GetPeerPublicKey(0))
+		// E2EE Peer.
+		keys = append(keys, "WIRETAP_E2EE_PEER_PUBLICKEY")
+		vals = append(vals, e2eeConfig.GetPeerPublicKey(0))
 
-	if len(e2eeConfig.GetPeerEndpoint(0)) > 0 {
-		keys = append(keys, "WIRETAP_E2EE_PEER_ENDPOINT")
-		vals = append(vals, e2eeConfig.GetPeerEndpoint(0))
+		if len(e2eeConfig.GetPeerEndpoint(0)) > 0 {
+			keys = append(keys, "WIRETAP_E2EE_PEER_ENDPOINT")
+			vals = append(vals, e2eeConfig.GetPeerEndpoint(0))
+		}
+	} else {
+		keys = append(keys, "WIRETAP_SIMPLE")
+		vals = append(vals, "true")
 	}
 
 	switch shell {
-	case "POSIX":
+	case POSIX:
 		for i := 0; i < len(keys); i++ {
 			s.WriteString(fmt.Sprintf("%s=%s ", keys[i], vals[i]))
 		}
 		s.WriteString("./wiretap serve")
-	case "POWERSHELL":
+	case PowerShell:
 		for i := 0; i < len(keys); i++ {
 			s.WriteString(fmt.Sprintf("$env:%s=\"%s\"; ", keys[i], vals[i]))
 		}
