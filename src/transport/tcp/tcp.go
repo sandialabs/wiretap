@@ -10,6 +10,7 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 
 	"net/netip"
 
@@ -28,6 +29,9 @@ import (
 	"wiretap/transport"
 )
 
+// How much time the client has to complete the TCP handshake before connection is dropped.
+const catchTimeout = time.Duration(1000) * time.Millisecond
+
 // tcpConn tracks a connection, source and destination IP and Port.
 type tcpConn struct {
 	Source string
@@ -39,6 +43,7 @@ type tcpConn struct {
 type connTrack struct {
 	Connecting bool
 	Conn       net.Conn
+	Caught     chan bool
 }
 
 // Keep track of connections so we don't duplicate work.
@@ -128,14 +133,24 @@ func checkIfOpen(conn tcpConn, pktChan chan stack.PacketBufferPtr, packet stack.
 		isOpenLock.Unlock()
 		return
 	}
-
+	caughtChan := make(chan bool)
 	// No error, mark successful and reinject packet.
 	isOpenLock.Lock()
 	isOpen[conn] = connTrack{
 		Connecting: false,
 		Conn:       c,
+		Caught:     caughtChan,
 	}
 	isOpenLock.Unlock()
+
+	// Start "catch" timer to make sure connection is actually used.
+	go func() {
+		select {
+		case <-time.After(catchTimeout):
+			c.Close()
+		case <-caughtChan:
+		}
+	}()
 
 	isIpv6 := !netip.MustParseAddrPort(c.RemoteAddr().String()).Addr().Is4()
 	netProto := ipv4.ProtocolNumber
@@ -269,6 +284,8 @@ func handleConn(c net.Conn, ipAddr netip.Addr, remoteAddr net.Addr, netProto tcp
 	// Delete original destination from map so it can be remade.
 	newConn := ctrack.Conn
 	isOpenLock.Lock()
+	// Notify catch timer that this conn is being used.
+	ctrack.Caught <- true
 	delete(isOpen, cString)
 	isOpenLock.Unlock()
 
