@@ -200,12 +200,13 @@ func Handle(tnet *netstack.Net, ipv4Addr netip.Addr, ipv6Addr netip.Addr, port u
 		}
 	}()
 
-	go startListener(tnet, s.IPTables(), &net.TCPAddr{Port: int(port)}, ipv4Addr, ipv6Addr)
+	go startListener(tnet, s.IPTables(), &net.TCPAddr{Port: int(port)}, ipv4Addr, ipv6Addr, s)
 }
 
 // startListener accepts connections from WireGuard peer.
-func startListener(tnet *netstack.Net, tables *stack.IPTables, listenAddr *net.TCPAddr, localAddr4 netip.Addr, localAddr6 netip.Addr) {
-	l, err := tnet.ListenTCP(listenAddr)
+func startListener(tnet *netstack.Net, tables *stack.IPTables, listenAddr *net.TCPAddr, localAddr4 netip.Addr, localAddr6 netip.Addr, s *stack.Stack) {
+	// Workaround to get true remote address even when connection closes prematurely.
+	l, err := listenTCP(s, listenAddr)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -214,23 +215,15 @@ func startListener(tnet *netstack.Net, tables *stack.IPTables, listenAddr *net.T
 
 	log.Println("Transport: TCP listener up")
 	for {
-		// Every TCP connection gets accepted here.
-		c, err := l.Accept()
-		if err != nil {
+		// Every TCP connection gets accepted here, modified Accept function sets correct remote address.
+		c, remoteAddr, err := l.AcceptFrom()
+		if err != nil || remoteAddr == nil {
 			log.Println("Failed to accept connection:", err)
 			continue
 		}
 
-		// Remote Address isn't populated yet.
-		// TODO: Figure out why and get rid of this silly busy loop.
 		go func() {
-			for {
-				if c.RemoteAddr() != nil {
-					break
-				}
-			}
-
-			isIpv6 := !netip.MustParseAddrPort(c.RemoteAddr().String()).Addr().Is4()
+			isIpv6 := !netip.MustParseAddrPort(remoteAddr.String()).Addr().Is4()
 			netProto := ipv4.ProtocolNumber
 			localAddr := localAddr4
 			if isIpv6 {
@@ -238,25 +231,18 @@ func startListener(tnet *netstack.Net, tables *stack.IPTables, listenAddr *net.T
 				localAddr = localAddr6
 			}
 
-			handleConn(c, localAddr, netProto, tables)
+			handleConn(c, localAddr, remoteAddr, netProto, tables)
 		}()
 	}
-
 }
 
 // handleConn finds the intended target of a peer's connection,
 // connects to that target, then copies data between the two.
-func handleConn(c net.Conn, ipAddr netip.Addr, netProto tcpip.NetworkProtocolNumber, tables *stack.IPTables) {
+func handleConn(c net.Conn, ipAddr netip.Addr, remoteAddr net.Addr, netProto tcpip.NetworkProtocolNumber, tables *stack.IPTables) {
 	var wg sync.WaitGroup
 	defer c.Close()
 
 	// Lookup original destination of this connection.
-	remoteAddr := c.RemoteAddr()
-
-	if remoteAddr == nil {
-		log.Println("Could not read remote address of connection")
-		return
-	}
 	addr, port, tcpipErr := tables.OriginalDst(stack.TransportEndpointID{
 		LocalPort:    1337,
 		LocalAddress: tcpip.Address(ipAddr.AsSlice()), RemotePort: netip.MustParseAddrPort(remoteAddr.String()).Port(),
@@ -308,7 +294,7 @@ func handleConn(c net.Conn, ipAddr netip.Addr, netProto tcpip.NetworkProtocolNum
 	wg.Wait()
 }
 
-// sendICMPEchoResponse sends an echo response to the peer with a spoofed source address.
+// sendRST sends an RST back to the original source of a packet.
 func sendRST(s *stack.Stack, packet stack.PacketBufferPtr) {
 	var err error
 	var ipv4Layer *layers.IPv4
