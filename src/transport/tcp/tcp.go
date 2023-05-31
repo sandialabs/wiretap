@@ -29,8 +29,14 @@ import (
 	"wiretap/transport"
 )
 
-// How much time the client has to complete the TCP handshake before connection is dropped.
-const catchTimeout = time.Duration(1000) * time.Millisecond
+// Configure TCP handler.
+type TcpConfig struct {
+	CatchTimeout time.Duration
+	ConnTimeout  time.Duration
+	Ipv4Addr     netip.Addr
+	Ipv6Addr     netip.Addr
+	Port         uint16
+}
 
 // tcpConn tracks a connection, source and destination IP and Port.
 type tcpConn struct {
@@ -54,6 +60,7 @@ var isOpenLock = sync.RWMutex{}
 type preroutingMatch struct {
 	pktChan  chan stack.PacketBufferPtr
 	endpoint *channel.Endpoint
+	config   *TcpConfig
 }
 
 // Match looks for SYN packets (start of a tcp conn). Before proxying connection, we need to check
@@ -75,9 +82,9 @@ func (m preroutingMatch) Match(hook stack.Hook, packet stack.PacketBufferPtr, in
 			ctrack, ok := isOpen[c]
 			isOpenLock.RUnlock()
 
-			// If not in conn map, drop this packet for now, but clone so it can
-			// be reinjected if connections are successful.
 			if !ok {
+				// If not in conn map, drop this packet for now, but clone so it can
+				// be reinjected if connections are successful.
 				isOpenLock.Lock()
 				// In progress, but not ready to forward SYN packets yet.
 				isOpen[c] = connTrack{
@@ -87,17 +94,18 @@ func (m preroutingMatch) Match(hook stack.Hook, packet stack.PacketBufferPtr, in
 
 				packetClone := packet.Clone()
 				go func() {
-					checkIfOpen(c, m.pktChan, packetClone, m.endpoint)
+					checkIfOpen(c, m, packetClone)
 					packetClone.DecRef()
 				}()
 
 				// Hotdrop because we're taking control of the packet.
 				return false, true
-				// Already checking if port is open. Do nothing.
 			} else if ctrack.Connecting {
+				// Already checking if port is open. Do nothing.
 				return false, false
-				// Connection is verified to be open. Allow this connection and reset conn map.
 			} else {
+				// Connection is verified to be open. Allow this connection and reset conn map.
+
 				return true, false
 			}
 		}
@@ -111,9 +119,9 @@ func (m preroutingMatch) Match(hook stack.Hook, packet stack.PacketBufferPtr, in
 }
 
 // If destination is open, whitelist and reinject. Otherwise send reset.
-func checkIfOpen(conn tcpConn, pktChan chan stack.PacketBufferPtr, packet stack.PacketBufferPtr, endpoint *channel.Endpoint) {
+func checkIfOpen(conn tcpConn, m preroutingMatch, packet stack.PacketBufferPtr) {
 	log.Printf("(client %v) - Transport: TCP -> %v", conn.Source, conn.Dest)
-	c, err := net.Dial("tcp", conn.Dest)
+	c, err := net.DialTimeout("tcp", conn.Dest, m.config.ConnTimeout)
 	if err != nil {
 		//log.Printf("Error connecting to %s: %s\n", conn.Dest, err)
 
@@ -122,7 +130,7 @@ func checkIfOpen(conn tcpConn, pktChan chan stack.PacketBufferPtr, packet stack.
 			if syserr, ok := oerr.Err.(*os.SyscallError); ok {
 				if syserr.Err == syscall.ECONNREFUSED {
 					//log.Println("Connection refused, sending reset")
-					pktChan <- packet.Clone()
+					m.pktChan <- packet.Clone()
 				}
 			}
 		}
@@ -146,7 +154,7 @@ func checkIfOpen(conn tcpConn, pktChan chan stack.PacketBufferPtr, packet stack.
 	// Start "catch" timer to make sure connection is actually used.
 	go func() {
 		select {
-		case <-time.After(catchTimeout):
+		case <-time.After(m.config.CatchTimeout):
 			c.Close()
 		case <-caughtChan:
 		}
@@ -160,12 +168,12 @@ func checkIfOpen(conn tcpConn, pktChan chan stack.PacketBufferPtr, packet stack.
 	new_packet := stack.NewPacketBuffer(stack.PacketBufferOptions{
 		Payload: packet.ToBuffer(),
 	})
-	endpoint.InjectInbound(netProto, new_packet)
+	m.endpoint.InjectInbound(netProto, new_packet)
 }
 
 // Handle creates a DNAT rule that forwards destination packets to a tcp listener.
 // Once a connection is accepted, it gets handed off to handleConn().
-func Handle(tnet *netstack.Net, ipv4Addr netip.Addr, ipv6Addr netip.Addr, port uint16, lock *sync.Mutex) {
+func Handle(tnet *netstack.Net, config TcpConfig, lock *sync.Mutex) {
 	s := tnet.Stack()
 
 	// Create iptables rule.
@@ -177,14 +185,15 @@ func Handle(tnet *netstack.Net, ipv4Addr netip.Addr, ipv6Addr netip.Addr, port u
 	match := preroutingMatch{
 		pktChan:  make(chan stack.PacketBufferPtr, 1),
 		endpoint: tnet.Endpoint(),
+		config:   &config,
 	}
 
 	rule4 := stack.Rule{
 		Filter:   headerFilter,
 		Matchers: []stack.Matcher{match},
 		Target: &stack.DNATTarget{
-			Addr:            tcpip.Address(ipv4Addr.AsSlice()),
-			Port:            port,
+			Addr:            tcpip.Address(config.Ipv4Addr.AsSlice()),
+			Port:            config.Port,
 			NetworkProtocol: ipv4.ProtocolNumber,
 		},
 	}
@@ -193,8 +202,8 @@ func Handle(tnet *netstack.Net, ipv4Addr netip.Addr, ipv6Addr netip.Addr, port u
 		Filter:   headerFilter,
 		Matchers: []stack.Matcher{match},
 		Target: &stack.DNATTarget{
-			Addr:            tcpip.Address(ipv6Addr.AsSlice()),
-			Port:            port,
+			Addr:            tcpip.Address(config.Ipv6Addr.AsSlice()),
+			Port:            config.Port,
 			NetworkProtocol: ipv6.ProtocolNumber,
 		},
 	}
@@ -215,7 +224,7 @@ func Handle(tnet *netstack.Net, ipv4Addr netip.Addr, ipv6Addr netip.Addr, port u
 		}
 	}()
 
-	go startListener(tnet, s.IPTables(), &net.TCPAddr{Port: int(port)}, ipv4Addr, ipv6Addr, s)
+	go startListener(tnet, s.IPTables(), &net.TCPAddr{Port: int(config.Port)}, config.Ipv4Addr, config.Ipv6Addr, s)
 }
 
 // startListener accepts connections from WireGuard peer.

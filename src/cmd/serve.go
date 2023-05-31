@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -38,6 +39,8 @@ type serveCmdConfig struct {
 	simple           bool
 	logging          bool
 	logFile          string
+	catchTimeout     uint
+	connTimeout      uint
 }
 
 type wiretapDefaultConfig struct {
@@ -66,6 +69,8 @@ var serveCmd = serveCmdConfig{
 	simple:           false,
 	logging:          false,
 	logFile:          "wiretap.log",
+	catchTimeout:     1000,
+	connTimeout:      1000,
 }
 
 var wiretapDefault = wiretapDefaultConfig{
@@ -105,6 +110,8 @@ func init() {
 	cmd.Flags().BoolVarP(&serveCmd.simple, "simple", "", serveCmd.simple, "disable multihop and multiclient features for a simpler setup")
 	cmd.Flags().BoolVarP(&serveCmd.logging, "log", "l", serveCmd.logging, "enable logging to file")
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
+	cmd.Flags().UintVarP(&serveCmd.catchTimeout, "completion-timeout", "", serveCmd.catchTimeout, "time in ms for client to complete TCP connection to server")
+	cmd.Flags().UintVarP(&serveCmd.connTimeout, "conn-timeout", "", serveCmd.connTimeout, "time in ms for server to wait for outgoing TCP handshakes to complete")
 
 	cmd.Flags().StringVarP(&serveCmd.clientAddr4Relay, "ipv4-relay-client", "", serveCmd.clientAddr4Relay, "ipv4 relay address of client")
 	cmd.Flags().StringVarP(&serveCmd.clientAddr6Relay, "ipv6-relay-client", "", serveCmd.clientAddr6Relay, "ipv6 relay address of client")
@@ -298,9 +305,10 @@ func (c serveCmdConfig) Run() {
 			ListenPort: E2EEPort,
 			Peers: []peer.PeerConfigArgs{
 				{
-					PublicKey:  viper.GetString("E2EE.Peer.publickey"),
-					Endpoint:   viper.GetString("E2EE.Peer.endpoint"),
-					AllowedIPs: []string{c.clientAddr4E2EE + "/32", c.clientAddr6E2EE + "/128"},
+					PublicKey:                   viper.GetString("E2EE.Peer.publickey"),
+					Endpoint:                    viper.GetString("E2EE.Peer.endpoint"),
+					AllowedIPs:                  []string{c.clientAddr4E2EE + "/32", c.clientAddr6E2EE + "/128"},
+					PersistentKeepaliveInterval: viper.GetInt("Relay.Peer.keepalive"),
 				},
 			},
 			Addresses: []string{viper.GetString("E2EE.Interface.ipv4") + "/32", viper.GetString("E2EE.Interface.ipv6") + "/128", viper.GetString("E2EE.Interface.api") + "/128"},
@@ -419,7 +427,14 @@ func (c serveCmdConfig) Run() {
 	wg.Add(1)
 	lock.Lock()
 	go func() {
-		tcp.Handle(transportHandler, ipv4Addr, ipv6Addr, 1337, &lock)
+		config := tcp.TcpConfig{
+			CatchTimeout: time.Duration(c.catchTimeout) * time.Millisecond,
+			ConnTimeout:  time.Duration(c.connTimeout) * time.Millisecond,
+			Ipv4Addr:     ipv4Addr,
+			Ipv6Addr:     ipv6Addr,
+			Port:         1337,
+		}
+		tcp.Handle(transportHandler, config, &lock)
 		wg.Done()
 	}()
 
