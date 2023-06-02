@@ -156,6 +156,9 @@ func checkIfOpen(conn tcpConn, m preroutingMatch, packet stack.PacketBufferPtr) 
 		select {
 		case <-time.After(m.config.CatchTimeout):
 			c.Close()
+			isOpenLock.Lock()
+			delete(isOpen, conn)
+			isOpenLock.Unlock()
 		case <-caughtChan:
 		}
 	}()

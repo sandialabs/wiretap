@@ -22,6 +22,9 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 )
 
+const keepaliveIdleDefault = 1 * time.Minute
+const keepaliveCountDefault = 2
+
 //  Address conversion adapted from https://git.zx2c4.com/wireguard-go/tree/tun/netstack/tun.go.
 /* SPDX-License-Identifier: MIT
  *
@@ -313,6 +316,28 @@ func (l *TCPListener) AcceptFrom() (net.Conn, net.Addr, error) {
 		}
 	}
 
+	if err != nil {
+		return nil, nil, &net.OpError{
+			Op:   "accept",
+			Net:  "tcp",
+			Addr: l.Addr(),
+			Err:  errors.New(err.String()),
+		}
+	}
+
+	// Enable keepalive and set defaults so that after (idle + (count * interval)) connection will be dropped if unresponsive.
+	n.SocketOptions().SetKeepAlive(true)
+	keepaliveIdle := tcpip.KeepaliveIdleOption(keepaliveIdleDefault)
+	err = n.SetSockOpt(&keepaliveIdle)
+	if err != nil {
+		return nil, nil, &net.OpError{
+			Op:   "accept",
+			Net:  "tcp",
+			Addr: l.Addr(),
+			Err:  errors.New(err.String()),
+		}
+	}
+	err = n.SetSockOptInt(tcpip.KeepaliveCountOption, keepaliveCountDefault)
 	if err != nil {
 		return nil, nil, &net.OpError{
 			Op:   "accept",

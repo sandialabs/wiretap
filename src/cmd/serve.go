@@ -69,8 +69,8 @@ var serveCmd = serveCmdConfig{
 	simple:           false,
 	logging:          false,
 	logFile:          "wiretap.log",
-	catchTimeout:     1000,
-	connTimeout:      1000,
+	catchTimeout:     5000,
+	connTimeout:      5000,
 }
 
 var wiretapDefault = wiretapDefaultConfig{
@@ -423,6 +423,7 @@ func (c serveCmdConfig) Run() {
 			return tnetE2EE
 		}
 	}()
+
 	// Start transport layer handlers under the e2ee device.
 	wg.Add(1)
 	lock.Lock()
