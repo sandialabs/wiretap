@@ -29,18 +29,21 @@ import (
 )
 
 type serveCmdConfig struct {
-	configFile       string
-	clientAddr4E2EE  string
-	clientAddr6E2EE  string
-	clientAddr4Relay string
-	clientAddr6Relay string
-	quiet            bool
-	debug            bool
-	simple           bool
-	logging          bool
-	logFile          string
-	catchTimeout     uint
-	connTimeout      uint
+	configFile        string
+	clientAddr4E2EE   string
+	clientAddr6E2EE   string
+	clientAddr4Relay  string
+	clientAddr6Relay  string
+	quiet             bool
+	debug             bool
+	simple            bool
+	logging           bool
+	logFile           string
+	catchTimeout      uint
+	connTimeout       uint
+	keepaliveIdle     uint
+	keepaliveCount    uint
+	keepaliveInterval uint
 }
 
 type wiretapDefaultConfig struct {
@@ -59,18 +62,21 @@ type wiretapDefaultConfig struct {
 
 // Defaults for serve command.
 var serveCmd = serveCmdConfig{
-	configFile:       "",
-	clientAddr4E2EE:  ClientE2EESubnet4.Addr().Next().String(),
-	clientAddr6E2EE:  ClientE2EESubnet6.Addr().Next().String(),
-	clientAddr4Relay: ClientRelaySubnet4.Addr().Next().Next().String(),
-	clientAddr6Relay: ClientRelaySubnet6.Addr().Next().Next().String(),
-	quiet:            false,
-	debug:            false,
-	simple:           false,
-	logging:          false,
-	logFile:          "wiretap.log",
-	catchTimeout:     5000,
-	connTimeout:      5000,
+	configFile:        "",
+	clientAddr4E2EE:   ClientE2EESubnet4.Addr().Next().String(),
+	clientAddr6E2EE:   ClientE2EESubnet6.Addr().Next().String(),
+	clientAddr4Relay:  ClientRelaySubnet4.Addr().Next().Next().String(),
+	clientAddr6Relay:  ClientRelaySubnet6.Addr().Next().Next().String(),
+	quiet:             false,
+	debug:             false,
+	simple:            false,
+	logging:           false,
+	logFile:           "wiretap.log",
+	catchTimeout:      5 * 1000,
+	connTimeout:       5 * 1000,
+	keepaliveIdle:     60,
+	keepaliveCount:    3,
+	keepaliveInterval: 60,
 }
 
 var wiretapDefault = wiretapDefaultConfig{
@@ -112,6 +118,9 @@ func init() {
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
 	cmd.Flags().UintVarP(&serveCmd.catchTimeout, "completion-timeout", "", serveCmd.catchTimeout, "time in ms for client to complete TCP connection to server")
 	cmd.Flags().UintVarP(&serveCmd.connTimeout, "conn-timeout", "", serveCmd.connTimeout, "time in ms for server to wait for outgoing TCP handshakes to complete")
+	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-idle", "", serveCmd.keepaliveIdle, "time in seconds before TCP keepalives are sent to client")
+	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-interval", "", serveCmd.keepaliveInterval, "time in seconds between TCP keepalives")
+	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-count", "", serveCmd.keepaliveCount, "number of unacknowledged TCP keepalives before closing connection")
 
 	cmd.Flags().StringVarP(&serveCmd.clientAddr4Relay, "ipv4-relay-client", "", serveCmd.clientAddr4Relay, "ipv4 relay address of client")
 	cmd.Flags().StringVarP(&serveCmd.clientAddr6Relay, "ipv6-relay-client", "", serveCmd.clientAddr6Relay, "ipv6 relay address of client")
@@ -219,6 +228,11 @@ func init() {
 				"api",
 				"keepalive",
 				"mtu",
+				"conn-timeout",
+				"completion-timeout",
+				"keepalive-interval",
+				"keepalive-count",
+				"keepalive-idle",
 			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
@@ -429,11 +443,14 @@ func (c serveCmdConfig) Run() {
 	lock.Lock()
 	go func() {
 		config := tcp.TcpConfig{
-			CatchTimeout: time.Duration(c.catchTimeout) * time.Millisecond,
-			ConnTimeout:  time.Duration(c.connTimeout) * time.Millisecond,
-			Ipv4Addr:     ipv4Addr,
-			Ipv6Addr:     ipv6Addr,
-			Port:         1337,
+			CatchTimeout:      time.Duration(c.catchTimeout) * time.Millisecond,
+			ConnTimeout:       time.Duration(c.connTimeout) * time.Millisecond,
+			KeepaliveIdle:     time.Duration(c.keepaliveIdle) * time.Second,
+			KeepaliveInterval: time.Duration(c.keepaliveInterval) * time.Second,
+			KeepaliveCount:    int(c.keepaliveCount),
+			Ipv4Addr:          ipv4Addr,
+			Ipv6Addr:          ipv6Addr,
+			Port:              1337,
 		}
 		tcp.Handle(transportHandler, config, &lock)
 		wg.Done()

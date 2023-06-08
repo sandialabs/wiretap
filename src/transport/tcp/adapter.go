@@ -22,9 +22,6 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 )
 
-const keepaliveIdleDefault = 1 * time.Minute
-const keepaliveCountDefault = 2
-
 //  Address conversion adapted from https://git.zx2c4.com/wireguard-go/tree/tun/netstack/tun.go.
 /* SPDX-License-Identifier: MIT
  *
@@ -291,7 +288,7 @@ func NewTCPConn(wq *waiter.Queue, ep tcpip.Endpoint) *TCPConn {
 
 // Changed from original:
 // AcceptFrom is identical to Accept except that it also returns the Remote Address as seen by the endpoint.
-func (l *TCPListener) AcceptFrom() (net.Conn, net.Addr, error) {
+func (l *TCPListener) AcceptFrom(c *TcpConfig) (net.Conn, net.Addr, error) {
 	remoteAddr := tcpip.FullAddress{}
 	n, wq, err := l.ep.Accept(&remoteAddr)
 
@@ -327,7 +324,7 @@ func (l *TCPListener) AcceptFrom() (net.Conn, net.Addr, error) {
 
 	// Enable keepalive and set defaults so that after (idle + (count * interval)) connection will be dropped if unresponsive.
 	n.SocketOptions().SetKeepAlive(true)
-	keepaliveIdle := tcpip.KeepaliveIdleOption(keepaliveIdleDefault)
+	keepaliveIdle := tcpip.KeepaliveIdleOption(c.KeepaliveIdle)
 	err = n.SetSockOpt(&keepaliveIdle)
 	if err != nil {
 		return nil, nil, &net.OpError{
@@ -337,7 +334,17 @@ func (l *TCPListener) AcceptFrom() (net.Conn, net.Addr, error) {
 			Err:  errors.New(err.String()),
 		}
 	}
-	err = n.SetSockOptInt(tcpip.KeepaliveCountOption, keepaliveCountDefault)
+	keepaliveInterval := tcpip.KeepaliveIntervalOption(c.KeepaliveInterval)
+	err = n.SetSockOpt(&keepaliveInterval)
+	if err != nil {
+		return nil, nil, &net.OpError{
+			Op:   "accept",
+			Net:  "tcp",
+			Addr: l.Addr(),
+			Err:  errors.New(err.String()),
+		}
+	}
+	err = n.SetSockOptInt(tcpip.KeepaliveCountOption, c.KeepaliveCount)
 	if err != nil {
 		return nil, nil, &net.OpError{
 			Op:   "accept",

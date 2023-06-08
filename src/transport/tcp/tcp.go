@@ -31,11 +31,14 @@ import (
 
 // Configure TCP handler.
 type TcpConfig struct {
-	CatchTimeout time.Duration
-	ConnTimeout  time.Duration
-	Ipv4Addr     netip.Addr
-	Ipv6Addr     netip.Addr
-	Port         uint16
+	Ipv4Addr          netip.Addr
+	Ipv6Addr          netip.Addr
+	Port              uint16
+	CatchTimeout      time.Duration
+	ConnTimeout       time.Duration
+	KeepaliveIdle     time.Duration
+	KeepaliveInterval time.Duration
+	KeepaliveCount    int
 }
 
 // tcpConn tracks a connection, source and destination IP and Port.
@@ -227,11 +230,11 @@ func Handle(tnet *netstack.Net, config TcpConfig, lock *sync.Mutex) {
 		}
 	}()
 
-	go startListener(tnet, s.IPTables(), &net.TCPAddr{Port: int(config.Port)}, config.Ipv4Addr, config.Ipv6Addr, s)
+	go startListener(tnet, s.IPTables(), &net.TCPAddr{Port: int(config.Port)}, config.Ipv4Addr, config.Ipv6Addr, s, &config)
 }
 
 // startListener accepts connections from WireGuard peer.
-func startListener(tnet *netstack.Net, tables *stack.IPTables, listenAddr *net.TCPAddr, localAddr4 netip.Addr, localAddr6 netip.Addr, s *stack.Stack) {
+func startListener(tnet *netstack.Net, tables *stack.IPTables, listenAddr *net.TCPAddr, localAddr4 netip.Addr, localAddr6 netip.Addr, s *stack.Stack, c *TcpConfig) {
 	// Workaround to get true remote address even when connection closes prematurely.
 	l, err := listenTCP(s, listenAddr)
 	if err != nil {
@@ -243,7 +246,7 @@ func startListener(tnet *netstack.Net, tables *stack.IPTables, listenAddr *net.T
 	log.Println("Transport: TCP listener up")
 	for {
 		// Every TCP connection gets accepted here, modified Accept function sets correct remote address.
-		c, remoteAddr, err := l.AcceptFrom()
+		c, remoteAddr, err := l.AcceptFrom(c)
 		if err != nil || remoteAddr == nil {
 			log.Println("Failed to accept connection:", err)
 			continue
