@@ -4,6 +4,7 @@ import (
 	"log"
 	"os/exec"
 	"runtime"
+	"time"
 
 	"github.com/go-ping/ping"
 )
@@ -41,13 +42,19 @@ func (socketPing) ping(addr string) (success bool, err error) {
 		return false, err
 	}
 
+	pinger.RecordRtts = false
+	pinger.Timeout = 1 * time.Second
 	pinger.Count = 1
 	err = pinger.Run()
 	if err != nil {
 		return false, err
 	}
 
-	return true, nil
+	if pinger.PacketsRecv > 0 {
+		return true, nil
+	} else {
+		return false, nil
+	}
 }
 
 // execPing attempts to ping destination address via ping binary on the local machine.
