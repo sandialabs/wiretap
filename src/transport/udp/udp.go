@@ -170,6 +170,7 @@ func newPacket(packet stack.PacketBufferPtr) {
 // Handle creates a DNAT rule that forwards destination packets to a udp listener.
 // Once a connection is accepted, it gets handed off to handleConn().
 func Handle(tnet *netstack.Net, ipv4Addr netip.Addr, ipv6Addr netip.Addr, port uint16, lock *sync.Mutex) {
+	lock.Lock()
 	s = tnet.Stack()
 
 	// Create NATing firewall rule.

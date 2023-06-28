@@ -19,6 +19,7 @@ import (
 	"golang.zx2c4.com/wireguard/tun/netstack"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
+	gtcp "gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 
 	"wiretap/peer"
 	"wiretap/transport/api"
@@ -262,8 +263,9 @@ func (c serveCmdConfig) Run() {
 
 	// Synchronization vars.
 	var (
-		wg   sync.WaitGroup
-		lock sync.Mutex
+		wg         sync.WaitGroup
+		lock       sync.Mutex
+		configLock sync.Mutex
 	)
 
 	// Configure logging.
@@ -399,6 +401,14 @@ func (c serveCmdConfig) Run() {
 		}
 	}
 
+	transportHandler := func() *netstack.Net {
+		if viper.GetBool("simple") {
+			return tnetRelay
+		} else {
+			return tnetE2EE
+		}
+	}()
+
 	var logger int
 	if c.debug {
 		logger = device.LogLevelVerbose
@@ -407,6 +417,25 @@ func (c serveCmdConfig) Run() {
 	} else {
 		logger = device.LogLevelError
 	}
+
+	// TCP Forwarding mechanism.
+	s := transportHandler.Stack()
+	s.SetPromiscuousMode(1, true)
+	tcpConfig := tcp.TcpConfig{
+		CatchTimeout:      time.Duration(c.catchTimeout) * time.Millisecond,
+		ConnTimeout:       time.Duration(c.connTimeout) * time.Millisecond,
+		KeepaliveIdle:     time.Duration(c.keepaliveIdle) * time.Second,
+		KeepaliveInterval: time.Duration(c.keepaliveInterval) * time.Second,
+		KeepaliveCount:    int(c.keepaliveCount),
+		Ipv4Addr:          ipv4Addr,
+		Ipv6Addr:          ipv6Addr,
+		Tnet:              transportHandler,
+		StackLock:         &lock,
+		ConfigLock:        &configLock,
+		ConnCounts:        make(map[netip.Addr]int),
+	}
+	tcpForwarder := gtcp.NewForwarder(s, 0, 100, tcp.Handler(tcpConfig))
+	s.SetTransportProtocolHandler(gtcp.ProtocolNumber, tcpForwarder.HandlePacket)
 
 	// Make new relay device.
 	devRelay := device.NewDevice(tunRelay, conn.NewDefaultBind(), device.NewLogger(logger, ""))
@@ -430,40 +459,13 @@ func (c serveCmdConfig) Run() {
 		check("failed to bring up e2ee device", err)
 	}
 
-	transportHandler := func() *netstack.Net {
-		if viper.GetBool("simple") {
-			return tnetRelay
-		} else {
-			return tnetE2EE
-		}
-	}()
-
-	// Start transport layer handlers under the e2ee device.
-	wg.Add(1)
-	lock.Lock()
-	go func() {
-		config := tcp.TcpConfig{
-			CatchTimeout:      time.Duration(c.catchTimeout) * time.Millisecond,
-			ConnTimeout:       time.Duration(c.connTimeout) * time.Millisecond,
-			KeepaliveIdle:     time.Duration(c.keepaliveIdle) * time.Second,
-			KeepaliveInterval: time.Duration(c.keepaliveInterval) * time.Second,
-			KeepaliveCount:    int(c.keepaliveCount),
-			Ipv4Addr:          ipv4Addr,
-			Ipv6Addr:          ipv6Addr,
-			Port:              1337,
-		}
-		tcp.Handle(transportHandler, config, &lock)
-		wg.Done()
-	}()
-
-	lock.Lock()
+	// Start transport layer handlers under the appropriate device. (TCP forwarder started above)
 	wg.Add(1)
 	go func() {
 		udp.Handle(transportHandler, ipv4Addr, ipv6Addr, 1337, &lock)
 		wg.Done()
 	}()
 
-	lock.Lock()
 	wg.Add(1)
 	go func() {
 		icmp.Handle(transportHandler, &lock)

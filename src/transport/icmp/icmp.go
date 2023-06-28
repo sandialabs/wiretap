@@ -44,6 +44,7 @@ func (m preroutingMatch) Match(hook stack.Hook, packet stack.PacketBufferPtr, in
 // handleICMP proxies ICMP messages using whatever means it can with the permissions this binary
 // has on the system.
 func Handle(tnet *netstack.Net, lock *sync.Mutex) {
+	lock.Lock()
 	s := tnet.Stack()
 
 	// create iptables rule that drops icmp, but clones packet and sends it to this handler.

@@ -2,9 +2,7 @@ module wiretap
 
 go 1.20
 
-replace golang.zx2c4.com/wireguard => github.com/luker983/wireguard-go v0.0.0-20230405143335-420d4b1d8857
-
-//replace golang.zx2c4.com/wireguard => ../custom-wireguard-go
+replace golang.zx2c4.com/wireguard => github.com/luker983/wireguard-go v0.0.0-20230628150900-2e22d4a23db1
 
 require (
 	github.com/atotto/clipboard v0.1.4
