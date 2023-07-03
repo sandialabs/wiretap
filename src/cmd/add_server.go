@@ -94,10 +94,6 @@ func (c addServerCmdConfig) Run() {
 		}
 
 		newRelayPrefixes := peer.GetNextPrefixesForPeers(relayPeers)
-		if len(newRelayPrefixes) != 2 {
-			check("failed to get next relay prefixes", errors.New("need two relay prefixes"))
-		}
-
 		basePrefix := netip.PrefixFrom(apiAddr, APIBits).Masked()
 		e2eePeers := clientConfigE2EE.GetPeers()
 		for _, p := range e2eePeers {
