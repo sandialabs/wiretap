@@ -2,7 +2,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,14 +16,8 @@ import (
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun/netstack"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
-	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
-	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 
 	"wiretap/peer"
-	"wiretap/transport"
 )
 
 var nsLock sync.Mutex
@@ -71,31 +64,6 @@ var serverAddresses map[uint64]NetworkState
 
 // Handle adds rule to top of firewall rules that accepts direct connections to API.
 func Handle(tnet *netstack.Net, devRelay *device.Device, devE2EE *device.Device, relayConfig *peer.Config, e2eeConfig *peer.Config, addr netip.Addr, port uint16, lock *sync.Mutex, ns *NetworkState) {
-	s := tnet.Stack()
-
-	headerFilter := stack.IPHeaderFilter{
-		Protocol:      tcp.ProtocolNumber,
-		CheckProtocol: true,
-		Dst:           tcpip.Address(addr.AsSlice()),
-		DstMask:       tcpip.Address(bytes.Repeat([]byte("\xff"), addr.BitLen()/8)),
-	}
-
-	rule := stack.Rule{
-		Filter: headerFilter,
-		Target: &stack.AcceptTarget{
-			NetworkProtocol: func() tcpip.NetworkProtocolNumber {
-				if addr.Is4() {
-					return ipv4.ProtocolNumber
-				}
-				return ipv6.ProtocolNumber
-			}(),
-		},
-	}
-
-	tid := stack.NATID
-	transport.PushRule(s, rule, tid, addr.Is6())
-	lock.Unlock()
-
 	configs := ServerConfigs{
 		RelayConfig: relayConfig,
 		E2EEConfig:  e2eeConfig,

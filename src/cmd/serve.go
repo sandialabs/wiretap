@@ -20,6 +20,7 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	gtcp "gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
+	gudp "gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 
 	"wiretap/peer"
 	"wiretap/transport/api"
@@ -263,9 +264,8 @@ func (c serveCmdConfig) Run() {
 
 	// Synchronization vars.
 	var (
-		wg         sync.WaitGroup
-		lock       sync.Mutex
-		configLock sync.Mutex
+		wg   sync.WaitGroup
+		lock sync.Mutex
 	)
 
 	// Configure logging.
@@ -418,24 +418,28 @@ func (c serveCmdConfig) Run() {
 		logger = device.LogLevelError
 	}
 
-	// TCP Forwarding mechanism.
 	s := transportHandler.Stack()
 	s.SetPromiscuousMode(1, true)
-	tcpConfig := tcp.TcpConfig{
+
+	// TCP Forwarding mechanism.
+	tcpConfig := tcp.Config{
 		CatchTimeout:      time.Duration(c.catchTimeout) * time.Millisecond,
 		ConnTimeout:       time.Duration(c.connTimeout) * time.Millisecond,
 		KeepaliveIdle:     time.Duration(c.keepaliveIdle) * time.Second,
 		KeepaliveInterval: time.Duration(c.keepaliveInterval) * time.Second,
 		KeepaliveCount:    int(c.keepaliveCount),
-		Ipv4Addr:          ipv4Addr,
-		Ipv6Addr:          ipv6Addr,
 		Tnet:              transportHandler,
 		StackLock:         &lock,
-		ConfigLock:        &configLock,
-		ConnCounts:        make(map[netip.Addr]int),
 	}
-	tcpForwarder := gtcp.NewForwarder(s, 0, 100, tcp.Handler(tcpConfig))
+	tcpForwarder := gtcp.NewForwarder(s, 0, 65535, tcp.Handler(tcpConfig))
 	s.SetTransportProtocolHandler(gtcp.ProtocolNumber, tcpForwarder.HandlePacket)
+
+	// UDP Forwarding mechanism.
+	udpConfig := udp.Config{
+		Tnet:      transportHandler,
+		StackLock: &lock,
+	}
+	s.SetTransportProtocolHandler(gudp.ProtocolNumber, udp.Handler(udpConfig))
 
 	// Make new relay device.
 	devRelay := device.NewDevice(tunRelay, conn.NewDefaultBind(), device.NewLogger(logger, ""))
@@ -459,34 +463,29 @@ func (c serveCmdConfig) Run() {
 		check("failed to bring up e2ee device", err)
 	}
 
-	// Start transport layer handlers under the appropriate device. (TCP forwarder started above)
-	wg.Add(1)
-	go func() {
-		udp.Handle(transportHandler, ipv4Addr, ipv6Addr, 1337, &lock)
-		wg.Done()
-	}()
+	// Handlers that require long-running routines:
 
+	// Start ICMP Handler.
 	wg.Add(1)
 	go func() {
 		icmp.Handle(transportHandler, &lock)
 		wg.Done()
 	}()
 
-	// Start API handler. Starting last because firewall rule needs to be first.
-	ns := api.NetworkState{
-		NextClientRelayAddr4: netip.MustParseAddr(c.clientAddr4Relay),
-		NextClientRelayAddr6: netip.MustParseAddr(c.clientAddr6Relay),
-		NextServerRelayAddr4: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv4")),
-		NextServerRelayAddr6: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv6")),
-		NextClientE2EEAddr4:  netip.MustParseAddr(c.clientAddr4E2EE),
-		NextClientE2EEAddr6:  netip.MustParseAddr(c.clientAddr6E2EE),
-		NextServerE2EEAddr4:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv4")),
-		NextServerE2EEAddr6:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv6")),
-		ApiAddr:              netip.MustParseAddr(viper.GetString("E2EE.Interface.api")),
-	}
-	lock.Lock()
+	// Start API handler.
 	wg.Add(1)
 	go func() {
+		ns := api.NetworkState{
+			NextClientRelayAddr4: netip.MustParseAddr(c.clientAddr4Relay),
+			NextClientRelayAddr6: netip.MustParseAddr(c.clientAddr6Relay),
+			NextServerRelayAddr4: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv4")),
+			NextServerRelayAddr6: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv6")),
+			NextClientE2EEAddr4:  netip.MustParseAddr(c.clientAddr4E2EE),
+			NextClientE2EEAddr6:  netip.MustParseAddr(c.clientAddr6E2EE),
+			NextServerE2EEAddr4:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv4")),
+			NextServerE2EEAddr6:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv6")),
+			ApiAddr:              netip.MustParseAddr(viper.GetString("E2EE.Interface.api")),
+		}
 		api.Handle(transportHandler, devRelay, devE2EE, &configRelay, &configE2EE, apiAddr, uint16(ApiPort), &lock, &ns)
 		wg.Done()
 	}()
