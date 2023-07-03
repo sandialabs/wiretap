@@ -30,8 +30,10 @@ type configureCmdConfig struct {
 	serverAddr4Relay string
 	serverAddr6Relay string
 	apiAddr          string
+	apiv4Addr        string
 	keepalive        int
 	mtu              int
+	disableV6        bool
 }
 
 // Defaults for configure command.
@@ -53,8 +55,10 @@ var configureCmdArgs = configureCmdConfig{
 	serverAddr4Relay: RelaySubnets4.Addr().Next().Next().String() + "/32",
 	serverAddr6Relay: RelaySubnets6.Addr().Next().Next().String() + "/128",
 	apiAddr:          ApiSubnets.Addr().Next().Next().String() + "/128",
+	apiv4Addr:        ApiV4Subnets.Addr().Next().Next().String() + "/32",
 	keepalive:        Keepalive,
 	mtu:              MTU,
+	disableV6:        false,
 }
 
 // configureCmd represents the configure command.
@@ -91,6 +95,7 @@ func init() {
 
 	configureCmd.Flags().IntVarP(&configureCmdArgs.keepalive, "keepalive", "k", configureCmdArgs.keepalive, "tunnel keepalive in seconds, only applies to outbound handshakes")
 	configureCmd.Flags().IntVarP(&configureCmdArgs.mtu, "mtu", "m", configureCmdArgs.mtu, "tunnel MTU")
+	configureCmd.Flags().BoolVarP(&configureCmdArgs.disableV6, "disable-ipv6", "", configureCmdArgs.disableV6, "disables IPv6")
 
 	err := configureCmd.MarkFlagRequired("routes")
 	check("failed to mark flag required", err)
@@ -102,7 +107,7 @@ func init() {
 	helpFunc := configureCmd.HelpFunc()
 	configureCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
-			for _, f := range []string{"api", "ipv4-relay", "ipv6-relay", "ipv4-e2ee", "ipv6-e2ee", "ipv4-relay-server", "ipv6-relay-server", "keepalive", "mtu"} {
+			for _, f := range []string{"api", "ipv4-relay", "ipv6-relay", "ipv4-e2ee", "ipv6-e2ee", "ipv4-relay-server", "ipv6-relay-server", "keepalive", "mtu", "disable-ipv6"} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
 					fmt.Printf("Failed to hide flag %v: %v\n", f, err)
@@ -118,6 +123,9 @@ func init() {
 func (c configureCmdConfig) Run() {
 	var err error
 
+	if c.disableV6 && netip.MustParsePrefix(c.apiAddr).Addr().Is6() {
+		c.apiAddr = c.apiv4Addr
+	}
 	c.allowedIPs = append(c.allowedIPs, c.apiAddr)
 
 	// Generate client and server configs.
@@ -137,6 +145,21 @@ func (c configureCmdConfig) Run() {
 	relaySubnet4 = netip.PrefixFrom(relaySubnet4.Addr(), SubnetV4Bits).Masked()
 	relaySubnet6 = netip.PrefixFrom(relaySubnet6.Addr(), SubnetV6Bits).Masked()
 
+	relaySubnets := []netip.Prefix{relaySubnet4}
+	if !c.disableV6 {
+		relaySubnets = append(relaySubnets, relaySubnet6)
+	}
+
+	clientRelayAddrs := []string{c.clientAddr4Relay}
+	if !c.disableV6 {
+		clientRelayAddrs = append(clientRelayAddrs, c.clientAddr6Relay)
+	}
+
+	clientE2EEAddrs := []string{c.clientAddr4E2EE}
+	if !c.disableV6 {
+		clientE2EEAddrs = append(clientE2EEAddrs, c.clientAddr6E2EE)
+	}
+
 	clientConfigRelayArgs := peer.ConfigArgs{
 		ListenPort: c.port,
 		Peers: []peer.PeerConfigArgs{
@@ -146,7 +169,13 @@ func (c configureCmdConfig) Run() {
 					if c.simple {
 						return c.allowedIPs
 					} else {
-						return []string{relaySubnet4.String(), relaySubnet6.String()}
+						return func() []string {
+							var s []string
+							for _, r := range relaySubnets {
+								s = append(s, r.String())
+							}
+							return s
+						}()
 					}
 				}(),
 				Endpoint: func() string {
@@ -165,7 +194,7 @@ func (c configureCmdConfig) Run() {
 				}(),
 			},
 		},
-		Addresses: []string{c.clientAddr4Relay, c.clientAddr6Relay},
+		Addresses: clientRelayAddrs,
 	}
 
 	clientConfigE2EEArgs := peer.ConfigArgs{
@@ -177,7 +206,7 @@ func (c configureCmdConfig) Run() {
 				Endpoint:   net.JoinHostPort(relaySubnet4.Addr().Next().Next().String(), fmt.Sprint(E2EEPort)),
 			},
 		},
-		Addresses: []string{c.clientAddr4E2EE, c.clientAddr6E2EE},
+		Addresses: clientE2EEAddrs,
 		MTU:       c.mtu - 80,
 	}
 
@@ -249,11 +278,14 @@ func (c configureCmdConfig) Run() {
 	if c.simple {
 		serverConfigFile = fmt.Sprintf("%s --simple", serverConfigFile)
 	}
+	if c.disableV6 {
+		serverConfigFile = fmt.Sprintf("%s --disable-ipv6", serverConfigFile)
+	}
 
 	// Copy to clipboard if requested.
 	var clipboardStatus string
 	if c.writeToClipboard {
-		err = clipboard.WriteAll(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple))
+		err = clipboard.WriteAll(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple, c.disableV6))
 		if err != nil {
 			clipboardStatus = fmt.Sprintf("%s %s", RedBold("clipboard:"), Red(fmt.Sprintf("error copying to clipboard: %v", err)))
 		} else {
@@ -281,8 +313,8 @@ func (c configureCmdConfig) Run() {
 	fmt.Fprintln(color.Output, fileStatusServer)
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, GreenBold("server command:"))
-	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple)))
-	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, c.simple)))
+	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple, c.disableV6)))
+	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, c.simple, c.disableV6)))
 	fmt.Fprintln(color.Output, Cyan("Config File: "), Green(serverConfigFile))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {

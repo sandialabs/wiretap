@@ -93,8 +93,6 @@ func (c statusCmdConfig) Run() {
 		for _, rp := range current.relayConfig.GetPeers() {
 			// Skip client-facing peers.
 			for _, ip := range rp.GetAllowedIPs() {
-				ClientRelaySubnet4 = netip.MustParsePrefix("172.16.0.0/16")
-				ClientRelaySubnet6 = netip.MustParsePrefix("fd:16::/40")
 				if ClientRelaySubnet4.Contains(netip.MustParseAddr(ip.IP.String())) || ClientRelaySubnet6.Contains(netip.MustParseAddr(ip.IP.String())) {
 					continue outer
 				}

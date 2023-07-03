@@ -419,7 +419,7 @@ func (c *Config) AsIPC() string {
 	return s.String()
 }
 
-func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, simple bool) string {
+func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, simple bool, disableV6 bool) string {
 	var s strings.Builder
 	var keys []string
 	var vals []string
@@ -428,9 +428,11 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 	keys = append(keys, "WIRETAP_RELAY_INTERFACE_PRIVATEKEY")
 	vals = append(vals, relayConfig.GetPrivateKey())
 
-	if len(relayConfig.addresses) == 2 {
+	if len(relayConfig.addresses) >= 1 {
 		keys = append(keys, "WIRETAP_RELAY_INTERFACE_IPV4")
 		vals = append(vals, relayConfig.addresses[0].IP.String())
+	}
+	if len(relayConfig.addresses) >= 2 {
 		keys = append(keys, "WIRETAP_RELAY_INTERFACE_IPV6")
 		vals = append(vals, relayConfig.addresses[1].IP.String())
 	}
@@ -488,6 +490,11 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 		vals = append(vals, "true")
 	}
 
+	if disableV6 {
+		keys = append(keys, "WIRETAP_DISABLEIPV6")
+		vals = append(vals, "true")
+	}
+
 	switch shell {
 	case POSIX:
 		for i := 0; i < len(keys); i++ {
@@ -511,8 +518,10 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config) string {
 	s.WriteString("[Relay.Interface]\n")
 	s.WriteString(fmt.Sprintf("PrivateKey = %s\n", relayConfig.GetPrivateKey()))
 
-	if len(relayConfig.addresses) == 2 {
+	if len(relayConfig.addresses) >= 1 {
 		s.WriteString(fmt.Sprintf("IPv4 = %s\n", relayConfig.addresses[0].IP.String()))
+	}
+	if len(relayConfig.addresses) >= 2 {
 		s.WriteString(fmt.Sprintf("IPv6 = %s\n", relayConfig.addresses[1].IP.String()))
 	}
 

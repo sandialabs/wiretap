@@ -46,6 +46,7 @@ type serveCmdConfig struct {
 	keepaliveIdle     uint
 	keepaliveCount    uint
 	keepaliveInterval uint
+	disableV6         bool
 }
 
 type wiretapDefaultConfig struct {
@@ -58,6 +59,7 @@ type wiretapDefaultConfig struct {
 	serverAddr4E2EE  string
 	serverAddr6E2EE  string
 	apiAddr          string
+	apiV4Addr        string
 	keepalive        int
 	mtu              int
 }
@@ -79,6 +81,7 @@ var serveCmd = serveCmdConfig{
 	keepaliveIdle:     60,
 	keepaliveCount:    3,
 	keepaliveInterval: 60,
+	disableV6:         false,
 }
 
 var wiretapDefault = wiretapDefaultConfig{
@@ -91,6 +94,7 @@ var wiretapDefault = wiretapDefaultConfig{
 	serverAddr4E2EE:  E2EESubnets4.Addr().Next().Next().String(),
 	serverAddr6E2EE:  E2EESubnets6.Addr().Next().Next().String(),
 	apiAddr:          ApiSubnets.Addr().Next().Next().String(),
+	apiV4Addr:        ApiV4Subnets.Addr().Next().Next().String(),
 	keepalive:        Keepalive,
 	mtu:              MTU,
 }
@@ -123,6 +127,7 @@ func init() {
 	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-idle", "", serveCmd.keepaliveIdle, "time in seconds before TCP keepalives are sent to client")
 	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-interval", "", serveCmd.keepaliveInterval, "time in seconds between TCP keepalives")
 	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-count", "", serveCmd.keepaliveCount, "number of unacknowledged TCP keepalives before closing connection")
+	cmd.Flags().BoolVarP(&serveCmd.disableV6, "disable-ipv6", "", serveCmd.disableV6, "disable ipv6")
 
 	cmd.Flags().StringVarP(&serveCmd.clientAddr4Relay, "ipv4-relay-client", "", serveCmd.clientAddr4Relay, "ipv4 relay address of client")
 	cmd.Flags().StringVarP(&serveCmd.clientAddr6Relay, "ipv6-relay-client", "", serveCmd.clientAddr6Relay, "ipv6 relay address of client")
@@ -131,6 +136,9 @@ func init() {
 
 	// Bind supported flags to environment variables.
 	err = viper.BindPFlag("simple", cmd.Flags().Lookup("simple"))
+	check("error binding flag to viper", err)
+
+	err = viper.BindPFlag("disableipv6", cmd.Flags().Lookup("disable-ipv6"))
 	check("error binding flag to viper", err)
 
 	// Quiet and debug flags must be used independently.
@@ -235,6 +243,7 @@ func init() {
 				"keepalive-interval",
 				"keepalive-count",
 				"keepalive-idle",
+				"disable-ipv6",
 			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
@@ -291,6 +300,22 @@ func (c serveCmdConfig) Run() {
 		check("config error", errors.New("public key of peer is required"))
 	}
 
+	if viper.IsSet("disableipv6") && netip.MustParseAddr(viper.GetString("E2EE.Interface.api")).Is6() {
+		viper.Set("E2EE.Interface.api", wiretapDefault.apiV4Addr)
+	}
+
+	relayAddresses := []string{viper.GetString("Relay.Interface.ipv4") + "/32"}
+	if !viper.IsSet("disableipv6") {
+		relayAddresses = append(relayAddresses, viper.GetString("Relay.Interface.ipv6")+"/128")
+	}
+	aips := []string{}
+	for _, ip := range strings.Split(viper.GetString("Relay.Peer.allowed"), ",") {
+		if viper.IsSet("disableipv6") && netip.MustParsePrefix(ip).Addr().Is6() {
+			continue
+		}
+
+		aips = append(aips, ip)
+	}
 	configRelayArgs := peer.ConfigArgs{
 		PrivateKey: viper.GetString("Relay.Interface.privatekey"),
 		ListenPort: viper.GetInt("Relay.Interface.port"),
@@ -305,15 +330,23 @@ func (c serveCmdConfig) Run() {
 						return 0
 					}
 				}(),
-				AllowedIPs: strings.Split(viper.GetString("Relay.Peer.allowed"), ","),
+				AllowedIPs: aips,
 			},
 		},
-		Addresses: []string{viper.GetString("Relay.Interface.ipv4") + "/32", viper.GetString("Relay.Interface.ipv6") + "/128"},
+		Addresses: relayAddresses,
 	}
 
 	configRelay, err := peer.GetConfig(configRelayArgs)
 	check("failed to make relay configuration", err)
 
+	allowedIPs := []string{c.clientAddr4E2EE + "/32"}
+	if !viper.IsSet("disableipv6") {
+		allowedIPs = append(allowedIPs, c.clientAddr6E2EE+"/128")
+	}
+	e2eeAddresses := []string{viper.GetString("E2EE.Interface.ipv4") + "/32"}
+	if !viper.IsSet("disableipv6") {
+		e2eeAddresses = append(e2eeAddresses, viper.GetString("E2EE.Interface.ipv6")+"/128")
+	}
 	var configE2EE peer.Config
 	if !viper.GetBool("simple") {
 		configE2EEArgs := peer.ConfigArgs{
@@ -323,11 +356,11 @@ func (c serveCmdConfig) Run() {
 				{
 					PublicKey:                   viper.GetString("E2EE.Peer.publickey"),
 					Endpoint:                    viper.GetString("E2EE.Peer.endpoint"),
-					AllowedIPs:                  []string{c.clientAddr4E2EE + "/32", c.clientAddr6E2EE + "/128"},
+					AllowedIPs:                  allowedIPs,
 					PersistentKeepaliveInterval: viper.GetInt("Relay.Peer.keepalive"),
 				},
 			},
-			Addresses: []string{viper.GetString("E2EE.Interface.ipv4") + "/32", viper.GetString("E2EE.Interface.ipv6") + "/128", viper.GetString("E2EE.Interface.api") + "/128"},
+			Addresses: e2eeAddresses,
 		}
 		configE2EE, err = peer.GetConfig(configE2EEArgs)
 		check("failed to make e2ee configuration", err)
@@ -355,10 +388,14 @@ func (c serveCmdConfig) Run() {
 	ipv4Addr, err := netip.ParseAddr(viper.GetString("Relay.Interface.ipv4"))
 	check("failed to parse ipv4 address", err)
 
-	ipv6Addr, err := netip.ParseAddr(viper.GetString("Relay.Interface.ipv6"))
-	check("failed to parse ipv6 address", err)
+	relayAddrs := []netip.Addr{ipv4Addr}
 
-	relayAddrs := []netip.Addr{ipv4Addr, ipv6Addr}
+	if !viper.IsSet("disableipv6") {
+		ipv6Addr, err := netip.ParseAddr(viper.GetString("Relay.Interface.ipv6"))
+		check("failed to parse ipv6 address", err)
+		relayAddrs = append(relayAddrs, ipv6Addr)
+	}
+
 	if viper.GetBool("simple") {
 		relayAddrs = append(relayAddrs, apiAddr)
 	}
@@ -379,21 +416,28 @@ func (c serveCmdConfig) Run() {
 		if tcpipErr != nil {
 			check("failed to enable forwarding", errors.New(tcpipErr.String()))
 		}
-		tcpipErr = s.SetForwardingDefaultAndAllNICs(ipv6.ProtocolNumber, true)
-		if tcpipErr != nil {
-			check("failed to enable forwarding", errors.New(tcpipErr.String()))
+		if !viper.IsSet("disableipv6") {
+			tcpipErr = s.SetForwardingDefaultAndAllNICs(ipv6.ProtocolNumber, true)
+			if tcpipErr != nil {
+				check("failed to enable forwarding", errors.New(tcpipErr.String()))
+			}
 		}
 
 		// Create virtual e2ee interface with this address and MTU - 80.
 		ipv4Addr, err = netip.ParseAddr(viper.GetString("E2EE.Interface.ipv4"))
 		check("failed to parse ipv4 address", err)
 
-		ipv6Addr, err = netip.ParseAddr(viper.GetString("E2EE.Interface.ipv6"))
-		check("failed to parse ipv6 address", err)
+		e2eeAddrs := []netip.Addr{ipv4Addr, apiAddr}
+
+		if !viper.IsSet("disableipv6") {
+			ipv6Addr, err := netip.ParseAddr(viper.GetString("E2EE.Interface.ipv6"))
+			check("failed to parse ipv6 address", err)
+			e2eeAddrs = append(e2eeAddrs, ipv6Addr)
+		}
 
 		if !viper.GetBool("simple") {
 			tunE2EE, tnetE2EE, err = netstack.CreateNetTUN(
-				[]netip.Addr{ipv4Addr, ipv6Addr, apiAddr},
+				e2eeAddrs,
 				[]netip.Addr{},
 				viper.GetInt("Relay.Interface.mtu")-80,
 			)

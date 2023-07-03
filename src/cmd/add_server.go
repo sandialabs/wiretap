@@ -76,6 +76,14 @@ func (c addServerCmdConfig) Run() {
 	serverConfigE2EE, err := peer.GetConfig(peer.ConfigArgs{})
 	check("failed to generate server e2ee config", err)
 
+	// Set APIBits based on v4/v6 address.
+	disableV6 := false
+	apiAddr := clientConfigE2EE.GetPeers()[0].GetApiAddr()
+	if apiAddr.Is4() {
+		disableV6 = true
+		APIBits = APIV4Bits
+	}
+
 	// Connect new server directly to client if no server address was provided.
 	// This branch sets up the server and client configs like `configure` does.
 	if len(c.serverAddress) == 0 {
@@ -90,14 +98,12 @@ func (c addServerCmdConfig) Run() {
 			check("failed to get next relay prefixes", errors.New("need two relay prefixes"))
 		}
 
-		// Find next API subnet
+		basePrefix := netip.PrefixFrom(apiAddr, APIBits).Masked()
 		e2eePeers := clientConfigE2EE.GetPeers()
-		baseAllowedIPs := e2eePeers[0].GetAllowedIPs()
-		basePrefix := netip.PrefixFrom(netip.MustParsePrefix(baseAllowedIPs[len(baseAllowedIPs)-1].String()).Addr(), APIBits).Masked()
 		for _, p := range e2eePeers {
-			prefixes := p.GetAllowedIPs()
+			apiAddr := p.GetApiAddr()
 
-			apiPrefix := netip.PrefixFrom(netip.MustParsePrefix(prefixes[len(prefixes)-1].String()).Addr(), APIBits).Masked()
+			apiPrefix := netip.PrefixFrom(apiAddr, APIBits).Masked()
 			if basePrefix.Addr().Less(apiPrefix.Addr()) {
 				basePrefix = apiPrefix
 			}
@@ -133,7 +139,7 @@ func (c addServerCmdConfig) Run() {
 		clientConfigRelay.AddPeer(serverRelayPeer)
 
 		// Add new server as E2EE peer.
-		c.allowedIPs = append(c.allowedIPs, apiPrefix.Addr().Next().Next().String()+"/128")
+		c.allowedIPs = append(c.allowedIPs, fmt.Sprintf("%s/%d", apiPrefix.Addr().Next().Next().String(), apiPrefix.Addr().BitLen()))
 		serverE2EEPeer, err := peer.GetPeerConfig(peer.PeerConfigArgs{
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
@@ -160,9 +166,14 @@ func (c addServerCmdConfig) Run() {
 		serverConfigRelay.AddPeer(clientPeerConfigRelay)
 		serverConfigE2EE.AddPeer(clientPeerConfigE2EE)
 
-		err = serverConfigRelay.SetAddresses([]string{newRelayPrefixes[0].Addr().Next().Next().String() + "/32", newRelayPrefixes[1].Addr().Next().Next().String() + "/128"})
+		relayAddrs := []string{newRelayPrefixes[0].Addr().Next().Next().String() + "/32"}
+		if !disableV6 {
+			relayAddrs = append(relayAddrs, newRelayPrefixes[1].Addr().Next().Next().String()+"/128")
+		}
+		err = serverConfigRelay.SetAddresses(relayAddrs)
 		check("failed to set addresses", err)
-		err = serverConfigE2EE.SetAddresses([]string{apiPrefix.Addr().Next().Next().String() + "/128"})
+
+		err = serverConfigE2EE.SetAddresses([]string{fmt.Sprintf("%s/%d", apiPrefix.Addr().Next().Next().String(), apiPrefix.Addr().BitLen())})
 		check("failed to set addresses", err)
 	} else {
 		// Get leaf server info
@@ -178,9 +189,7 @@ func (c addServerCmdConfig) Run() {
 		leafApiPrefix := netip.PrefixFrom(leafApiAddr, APIBits)
 		apiAddr := leafApiAddr
 		for _, p := range clientConfigE2EE.GetPeers() {
-			aps := p.GetAllowedIPs()
-			aa := netip.MustParsePrefix(aps[len(aps)-1].String()).Addr()
-
+			aa := p.GetApiAddr()
 			if leafApiPrefix.Contains(aa) && aa.Less(apiAddr) {
 				apiAddr = aa
 			}
@@ -205,13 +214,17 @@ func (c addServerCmdConfig) Run() {
 				check("failed to set endpoint", err)
 			}
 		}
-		err = leafServerPeerConfigRelay.SetAllowedIPs([]string{ClientRelaySubnet4.String(), ClientRelaySubnet6.String()})
+		relayAddrs := []string{ClientRelaySubnet4.String()}
+		if !disableV6 {
+			relayAddrs = append(relayAddrs, ClientRelaySubnet6.String())
+		}
+		err = leafServerPeerConfigRelay.SetAllowedIPs(relayAddrs)
 		check("failed to set allowedIPs", err)
 		serverConfigRelay.AddPeer(leafServerPeerConfigRelay)
 		serverConfigE2EE.AddPeer(clientPeerConfigE2EE)
 
 		// Make E2EE peer for local config.
-		c.allowedIPs = append(c.allowedIPs, addresses.ApiAddr.String()+"/128")
+		c.allowedIPs = append(c.allowedIPs, fmt.Sprintf("%s/%d", addresses.ApiAddr.String(), addresses.ApiAddr.BitLen()))
 		serverPeerConfigE2EE, err := peer.GetPeerConfig(peer.PeerConfigArgs{
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
@@ -221,9 +234,13 @@ func (c addServerCmdConfig) Run() {
 		clientConfigE2EE.AddPeer(serverPeerConfigE2EE)
 
 		// Make peer config for the server that this new server will connect to.
+		addrs := []string{addresses.NextServerRelayAddr4.String() + "/32"}
+		if !disableV6 {
+			addrs = append(addrs, addresses.NextServerRelayAddr6.String()+"/128")
+		}
 		serverPeerConfigRelay, err := peer.GetPeerConfig(peer.PeerConfigArgs{
 			PublicKey:  serverConfigRelay.GetPublicKey(),
-			AllowedIPs: []string{addresses.NextServerRelayAddr4.String() + "/32", addresses.NextServerRelayAddr6.String() + "/128"},
+			AllowedIPs: addrs,
 			Endpoint: func() string {
 				if addArgs.outbound {
 					return addArgs.endpoint
@@ -245,9 +262,9 @@ func (c addServerCmdConfig) Run() {
 		err = api.AddRelayPeer(leafApiAddrPort, serverPeerConfigRelay)
 		check("failed to add peer to leaf server", err)
 
-		err = serverConfigRelay.SetAddresses([]string{addresses.NextServerRelayAddr4.String() + "/32", addresses.NextServerRelayAddr6.String() + "/128"})
+		err = serverConfigRelay.SetAddresses(addrs)
 		check("failed to set addresses", err)
-		err = serverConfigE2EE.SetAddresses([]string{addresses.ApiAddr.String() + "/128"})
+		err = serverConfigE2EE.SetAddresses([]string{fmt.Sprintf("%s/%d", addresses.ApiAddr.String(), addresses.ApiAddr.BitLen())})
 		check("failed to set addresses", err)
 
 		// Update routes for every node in path to new server (after getting addresses)
@@ -265,8 +282,8 @@ func (c addServerCmdConfig) Run() {
 						// Find which of our E2EE peers has an endpoint that matches the first Allowed IP of this peer:
 						for _, e2ee_p := range clientConfigE2EE.GetPeers() {
 							if p.GetAllowedIPs()[0].Contains(e2ee_p.GetEndpoint().IP) {
-								aps := e2ee_p.GetAllowedIPs()
-								serverApi = netip.MustParseAddrPort(net.JoinHostPort(aps[len(aps)-1].IP.String(), fmt.Sprint(ApiPort)))
+								aa := e2ee_p.GetApiAddr()
+								serverApi = netip.MustParseAddrPort(net.JoinHostPort(aa.String(), fmt.Sprint(ApiPort)))
 								continue outer
 							}
 						}
@@ -320,7 +337,7 @@ func (c addServerCmdConfig) Run() {
 	// Copy to clipboard if requested.
 	var clipboardStatus string
 	if c.writeToClipboard {
-		err = clipboard.WriteAll(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false))
+		err = clipboard.WriteAll(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false, disableV6))
 		if err != nil {
 			clipboardStatus = fmt.Sprintf("%s %s", RedBold("clipboard:"), Red(fmt.Sprintf("error copying to clipboard: %v", err)))
 		} else {
@@ -347,8 +364,8 @@ func (c addServerCmdConfig) Run() {
 	fmt.Fprintln(color.Output)
 	fmt.Fprintln(color.Output, fileStatusServer)
 	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false)))
-	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, false)))
+	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false, disableV6)))
+	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, false, disableV6)))
 	fmt.Fprintln(color.Output, Cyan("Config File: "), Green("./wiretap serve -f "+c.configFileServer))
 	fmt.Fprintln(color.Output)
 	if c.writeToClipboard {

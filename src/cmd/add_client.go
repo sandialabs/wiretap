@@ -70,15 +70,29 @@ func (c addClientCmdConfig) Run() {
 	addresses, err := api.AllocateClientNode(apiAddrPort)
 	check("failed to retrieve address allocation from server", err)
 
+	disableV6 := false
+	if len(baseConfigE2EE.GetPeers()[0].GetAllowedIPs()) < 3 {
+		disableV6 = true
+	}
+
 	// Make new configs for client.
+	relayAddrs := []string{addresses.NextClientRelayAddr4.String() + "/32"}
+	if !disableV6 {
+		relayAddrs = append(relayAddrs, addresses.NextClientRelayAddr6.String()+"/128")
+	}
 	clientConfigRelay, err := peer.GetConfig(peer.ConfigArgs{
 		ListenPort: addCmdArgs.port,
-		Addresses:  []string{addresses.NextClientRelayAddr4.String() + "/32", addresses.NextClientRelayAddr6.String() + "/128"},
+		Addresses:  relayAddrs,
 	})
 	check("failed to generate client relay config", err)
+
+	e2eeAddrs := []string{addresses.NextClientE2EEAddr4.String() + "/32"}
+	if !disableV6 {
+		e2eeAddrs = append(e2eeAddrs, addresses.NextClientE2EEAddr6.String()+"/128")
+	}
 	clientConfigE2EE, err := peer.GetConfig(peer.ConfigArgs{
 		ListenPort: E2EEPort,
-		Addresses:  []string{addresses.NextClientE2EEAddr4.String() + "/32", addresses.NextClientE2EEAddr6.String() + "/128"},
+		Addresses:  e2eeAddrs,
 		MTU:        c.mtu - 80,
 	})
 	check("failed to generate relay e2ee config", err)
