@@ -244,6 +244,10 @@ func (c configureCmdConfig) Run() {
 	c.configFileE2EE = peer.FindAvailableFilename(c.configFileE2EE)
 	c.configFileServer = peer.FindAvailableFilename(c.configFileServer)
 
+	if c.simple {
+		c.configFileRelay = c.configFileE2EE
+	}
+
 	// Write config file and get status string.
 	var fileStatusRelay string
 	err = os.WriteFile(c.configFileRelay, []byte(clientConfigRelay.AsFile()), 0600)

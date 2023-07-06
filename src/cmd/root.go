@@ -18,7 +18,7 @@ var (
 	Port               = 51820
 	E2EEPort           = 51821
 	ConfigRelay        = "wiretap_relay.conf"
-	ConfigE2EE         = "wiretap_e2ee.conf"
+	ConfigE2EE         = "wiretap.conf"
 	ConfigServer       = "wiretap_server.conf"
 	Keepalive          = 25
 	MTU                = 1420

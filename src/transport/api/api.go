@@ -418,11 +418,6 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 			exposeLock.Lock()
 			defer exposeLock.Unlock()
 
-			// Skip dynamic forwarding for now.
-			if requestArgs.Dynamic {
-				break
-			}
-
 			_, ok := (*exposeMap)[et]
 			if ok {
 				// Already exists, cancel.
@@ -430,13 +425,30 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 				return
 			}
 
-			// Bind successful, expose port.
 			proto := ipv4.ProtocolNumber
 			if et.RemoteAddr.Is6() {
 				proto = ipv6.ProtocolNumber
 			}
 
-			if requestArgs.Protocol == "tcp" {
+			if requestArgs.Dynamic {
+				// Handle Dynamic.
+				l, err := net.Listen("tcp", fmt.Sprintf(":%d", requestArgs.RemotePort))
+				if err != nil {
+					writeErr(w, err)
+					return
+				}
+
+				// Bind successful, perform dynamic forwarding.
+				go transport.ForwardDynamic(
+					tnet.Stack(),
+					&l,
+					localAddr,
+					tcpip.FullAddress{NIC: 1, Addr: tcpip.Address(et.RemoteAddr.AsSlice())},
+					proto,
+				)
+
+				(*exposeMap)[et] = ExposeConn{TcpListener: &l}
+			} else if requestArgs.Protocol == "tcp" {
 				// Handle TCP.
 				l, err := net.Listen(requestArgs.Protocol, fmt.Sprintf(":%d", requestArgs.RemotePort))
 				if err != nil {
@@ -444,6 +456,7 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 					return
 				}
 
+				// Bind successful, expose port.
 				go transport.ForwardTcpPort(
 					tnet.Stack(),
 					l,
@@ -466,6 +479,7 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 					return
 				}
 
+				// Bind successful, expose port.
 				go transport.ForwardUdpPort(
 					tnet.Stack(),
 					c,

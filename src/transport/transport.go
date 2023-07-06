@@ -9,8 +9,10 @@ import (
 	"log"
 	"net"
 	"net/netip"
+	"strconv"
 	"sync"
 
+	"github.com/armon/go-socks5"
 	"github.com/google/gopacket"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
@@ -259,4 +261,38 @@ func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddre
 	}
 
 	wg.Wait()
+}
+
+// ForwardTcpPort proxies TCP connections by accepting connections and proxying them back to the client.
+func ForwardDynamic(s *stack.Stack, l *net.Listener, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
+	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		_, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		dport, err := strconv.Atoi(port)
+		if err != nil {
+			return nil, err
+		}
+
+		return gonet.DialTCPWithBind(
+			ctx,
+			s,
+			localAddr,
+			tcpip.FullAddress{NIC: remoteAddr.NIC, Addr: remoteAddr.Addr, Port: uint16(dport)},
+			np,
+		)
+	}
+
+	conf := &socks5.Config{Dial: dialer}
+	server, err := socks5.New(conf)
+	if err != nil {
+		log.Println("failed to make socks server:", err)
+		return
+	}
+
+	if err := server.Serve(*l); err != nil {
+		log.Println("socks server stopped:", err)
+	}
 }
