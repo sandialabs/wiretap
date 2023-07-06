@@ -124,9 +124,9 @@ func init() {
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
 	cmd.Flags().UintVarP(&serveCmd.catchTimeout, "completion-timeout", "", serveCmd.catchTimeout, "time in ms for client to complete TCP connection to server")
 	cmd.Flags().UintVarP(&serveCmd.connTimeout, "conn-timeout", "", serveCmd.connTimeout, "time in ms for server to wait for outgoing TCP handshakes to complete")
-	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-idle", "", serveCmd.keepaliveIdle, "time in seconds before TCP keepalives are sent to client")
-	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-interval", "", serveCmd.keepaliveInterval, "time in seconds between TCP keepalives")
-	cmd.Flags().UintVarP(&serveCmd.connTimeout, "keepalive-count", "", serveCmd.keepaliveCount, "number of unacknowledged TCP keepalives before closing connection")
+	cmd.Flags().UintVarP(&serveCmd.keepaliveIdle, "keepalive-idle", "", serveCmd.keepaliveIdle, "time in seconds before TCP keepalives are sent to client")
+	cmd.Flags().UintVarP(&serveCmd.keepaliveInterval, "keepalive-interval", "", serveCmd.keepaliveInterval, "time in seconds between TCP keepalives")
+	cmd.Flags().UintVarP(&serveCmd.keepaliveCount, "keepalive-count", "", serveCmd.keepaliveCount, "number of unacknowledged TCP keepalives before closing connection")
 	cmd.Flags().BoolVarP(&serveCmd.disableV6, "disable-ipv6", "", serveCmd.disableV6, "disable ipv6")
 
 	cmd.Flags().StringVarP(&serveCmd.clientAddr4Relay, "ipv4-relay-client", "", serveCmd.clientAddr4Relay, "ipv4 relay address of client")
