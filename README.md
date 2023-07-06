@@ -303,6 +303,46 @@ Endpoint = 172.17.0.3:51821
 
 Send these files and have the recipient import them into WireGuard to have access to everything in the Wiretap network! By default the routes (AllowedIPs) are copied over, but can be modified by the recipient as needed.
 
+### Port Forwarding
+
+> **Warning**
+> Port forwarding exposes services on your local machine to the remote network, use with caution
+
+You can expose a service on the client by using the `expose` subcommand. For example, to allow remote systems to access port 80/tcp on your local machine, you could run:
+
+```
+./wiretap expose --local 80 --remote 8080
+```
+
+Now all Wiretap servers will be bound to port 8080/tcp and proxy connections to your services on port 80/tcp. By default this uses IPv6, so make sure any listening services support IPv6 as well.
+To configure Wiretap to only use IPv4, use the `configure` subcommand's `--disable-ipv6` option. 
+
+To dynamically forward all ports using SOCKS5:
+
+```
+./wiretap expose --dynamic --remote 8080
+```
+
+All servers will spin up a SOCKS5 server on port 8080 and proxy traffic to your local machine and can be used like this:
+
+```
+curl -x socks5://<server-ip>:8080 http://<any-ip>:1337
+```
+
+The destination IP will be rewritten by the server so you can put any address.
+
+#### List
+
+Use `./wiretap expose list` to see all forwarding rules currently configured.
+
+#### Remove
+
+Use `./wiretap remove` with the same arguments used in `expose` to delete a rule. For example, to remove the SOCKS5 example above:
+
+```
+./wiretap expose remove --dynamic --remote 8080
+```
+
 ## How It Works
 
 A traditional VPN can't be installed by unprivileged users because VPNs rely on dangerous operations like changing network routes and working with raw packets.
@@ -329,6 +369,7 @@ Usage:
 Available Commands:
   add         Add peer to wiretap
   configure   Build wireguard config
+  expose      Expose local services to servers
   help        Help about any command
   ping        Ping wiretap server API
   serve       Listen and proxy traffic into target network
@@ -353,9 +394,12 @@ Use "wiretap [command] --help" for more information about a command.
     - TCP
         - Transparent connections
         - RST response when port is unreachable
+        - Reverse Port Forward
+        - Reverse Socks5 Support
     - UDP
         - Transparent "connections"
         - ICMP Destination Unreachable when port is unreachable
+        - Reverse Port Forward
 * Application
     - API internal to Wiretap for dynamic configuration
     - Chain servers together to tunnel traffic through an arbitrary number of machines
