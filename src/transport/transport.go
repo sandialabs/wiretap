@@ -3,12 +3,17 @@ package transport
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"io"
+	"log"
+	"net"
 	"net/netip"
 	"sync"
 
 	"github.com/google/gopacket"
 	"gvisor.dev/gvisor/pkg/tcpip"
+	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
@@ -129,4 +134,129 @@ func SendPacket(s *stack.Stack, packet []byte, addr *tcpip.FullAddress, netProto
 	}
 
 	return nil
+}
+
+func Proxy(src net.Conn, dst net.Conn) {
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		_, err := io.Copy(src, dst)
+		if err != nil {
+			log.Printf("error copying between connections: %v\n", err)
+		}
+		src.Close()
+		wg.Done()
+	}()
+
+	// Copy from peer to new connection.
+	_, nerr := io.Copy(dst, src)
+	if nerr != nil {
+		log.Printf("error copying between connections: %v\n", nerr)
+	}
+	dst.Close()
+
+	// Wait for both copies to finish.
+	wg.Wait()
+}
+
+// ForwardTcpPort proxies TCP connections by accepting connections and proxying them back to the client.
+func ForwardTcpPort(s *stack.Stack, l net.Listener, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
+	ctx, cancel := context.WithCancel(context.Background())
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			cancel()
+			return
+		}
+
+		// Proxy between conns.
+		go func() {
+			var nc net.Conn
+			nc, err = gonet.DialTCPWithBind(
+				ctx,
+				s,
+				localAddr,
+				remoteAddr,
+				np,
+			)
+			if err != nil {
+				log.Println("failed to proxy conn:", err)
+				conn.Close()
+				return
+			}
+
+			Proxy(conn, nc)
+		}()
+	}
+}
+
+// ForwardUdpPort proxies UDP datagrams by forwarding datagrams to a peer, and then returns responses to the last remote address to talk to this endpoint.
+// No connection tracking is in place at this time.
+func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
+	var wg sync.WaitGroup
+	var clientAddr *netip.AddrPort
+	var lock sync.Mutex
+
+	const bufSize = 65535
+
+	// Connect to forwarded port.
+	nc, err := gonet.DialUDP(
+		s,
+		&localAddr,
+		&remoteAddr,
+		np,
+	)
+	if err != nil {
+		log.Println("failed to proxy conn:", err)
+		conn.Close()
+		return
+	}
+
+	// Accept packets and forward to peer.
+	wg.Add(1)
+	go func() {
+		buf := make([]byte, bufSize)
+		for {
+			n, addr, err := conn.ReadFromUDPAddrPort(buf)
+			if err != nil {
+				nc.Close()
+				log.Println("conn closed:", err)
+				break
+			}
+			lock.Lock()
+			clientAddr = &addr
+			lock.Unlock()
+			_, err = nc.Write(buf[:n])
+			if err != nil {
+				log.Println("failed to send:", err)
+				continue
+			}
+		}
+		wg.Done()
+	}()
+
+	for {
+		buf := make([]byte, bufSize)
+		n, err := nc.Read(buf)
+		if err != nil {
+			log.Println("conn closed:", err)
+			conn.Close()
+			break
+		}
+		lock.Lock()
+		if clientAddr == nil {
+			lock.Unlock()
+			continue
+		}
+		addr := *clientAddr
+		lock.Unlock()
+		_, err = conn.WriteToUDPAddrPort(buf[:n], addr)
+		if err != nil {
+			log.Println("failed to send:", err)
+			continue
+		}
+	}
+
+	wg.Wait()
 }

@@ -155,3 +155,74 @@ func AddAllowedIPs(apiAddr netip.AddrPort, pubKey wgtypes.Key, allowedIPs []net.
 
 	return err
 }
+
+func Expose(apiAddr netip.AddrPort, localPort uint, remotePort uint, protocol string, dynamic bool) error {
+	req := serverapi.ExposeRequest{
+		Action:     serverapi.ExposeActionExpose,
+		LocalPort:  localPort,
+		RemotePort: remotePort,
+		Protocol:   protocol,
+		Dynamic:    dynamic,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	_, err = makeRequest(request{
+		URL:    makeUrl(apiAddr, "expose", []string{}),
+		Method: "POST",
+		Body:   body,
+	})
+
+	return err
+}
+
+func ExposeList(apiAddr netip.AddrPort) ([]serverapi.ExposeTuple, error) {
+	req := serverapi.ExposeRequest{
+		Action: serverapi.ExposeActionList,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err = makeRequest(request{
+		URL:    makeUrl(apiAddr, "expose", []string{}),
+		Method: "POST",
+		Body:   body,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var tuples []serverapi.ExposeTuple
+	err = json.Unmarshal(body, &tuples)
+
+	return tuples, err
+}
+
+func ExposeDelete(apiAddr netip.AddrPort, localPort uint, remotePort uint, protocol string, dynamic bool) error {
+	req := serverapi.ExposeRequest{
+		Action:     serverapi.ExposeActionDelete,
+		LocalPort:  localPort,
+		RemotePort: remotePort,
+		Protocol:   protocol,
+		Dynamic:    dynamic,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	_, err = makeRequest(request{
+		URL:    makeUrl(apiAddr, "expose", []string{}),
+		Method: "POST",
+		Body:   body,
+	})
+
+	return err
+}

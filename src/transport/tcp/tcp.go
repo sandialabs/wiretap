@@ -9,7 +9,6 @@ package tcp
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -42,16 +41,24 @@ type Config struct {
 // Handler manages a single TCP flow.
 func Handler(c Config) func(*tcp.ForwarderRequest) {
 	return func(req *tcp.ForwarderRequest) {
-		var wg sync.WaitGroup
-
 		// Received TCP flow, add address so we can work with it.
 		s := req.ID()
 		log.Printf("(client %s) - Transport: TCP -> %s", net.JoinHostPort(s.RemoteAddress.String(), fmt.Sprint(s.RemotePort)), net.JoinHostPort(s.LocalAddress.String(), fmt.Sprint(s.LocalPort)))
 
 		// Add address to stack.
 		addr, _ := netip.AddrFromSlice(net.IP(s.LocalAddress))
-		transport.GetConnCounts().AddAddress(addr, c.Tnet.Stack(), c.StackLock)
-		defer transport.GetConnCounts().RemoveAddress(addr, c.Tnet.Stack(), c.StackLock)
+		err := transport.GetConnCounts().AddAddress(addr, c.Tnet.Stack(), c.StackLock)
+		if err != nil {
+			log.Println("failed to add address:", err)
+			req.Complete(false)
+			return
+		}
+		defer func() {
+			err := transport.GetConnCounts().RemoveAddress(addr, c.Tnet.Stack(), c.StackLock)
+			if err != nil {
+				log.Println("failed to remove address:", err)
+			}
+		}()
 
 		// Address is added, now test if remote endpoint is available.
 		dstConn, caughtChan, rst := checkDst(&c, s)
@@ -71,26 +78,7 @@ func Handler(c Config) func(*tcp.ForwarderRequest) {
 		// Tell checker that this connection was caught, timer can shutdown.
 		caughtChan <- true
 
-		// Copy from new connection to peer
-		wg.Add(1)
-		go func() {
-			_, err := io.Copy(srcConn, dstConn)
-			if err != nil {
-				log.Printf("error copying between connections: %v\n", err)
-			}
-			wg.Done()
-			srcConn.Close()
-		}()
-
-		// Copy from peer to new connection.
-		_, nerr := io.Copy(dstConn, srcConn)
-		if nerr != nil {
-			log.Printf("error copying between connections: %v\n", err)
-		}
-		dstConn.Close()
-
-		// Wait for both copies to finish.
-		wg.Wait()
+		transport.Proxy(srcConn, dstConn)
 	}
 }
 
