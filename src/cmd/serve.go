@@ -28,6 +28,9 @@ import (
 	"wiretap/transport/tcp"
 	"wiretap/transport/udp"
 	"wiretap/transport/userspace"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 type serveCmdConfig struct {
@@ -258,6 +261,11 @@ func init() {
 // Run parses/processes/validates args and then connects to peer,
 // proxying traffic from peer into local network.
 func (c serveCmdConfig) Run() {
+	// DEBUG/PROFILE
+	go func() {
+		log.Println(http.ListenAndServe(":6060", nil))
+	}()
+
 	// Read config from file and/or environment.
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("WIRETAP")
