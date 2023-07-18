@@ -43,6 +43,8 @@
 #
 # Run `socat TCP-LISTEN:6000,reuseaddr,fork UNIX-CLIENT:\"$DISPLAY\"` before recording to enable clipboard operations
 # If using XQuartz, also run `xhost + localhost`
+#
+# Postprocess with `ffmpeg -an -i wiretap_demo.mp4 -vf "scale=1600:-1,fps=30" -c:v libx264 -preset slow -crf 28 output.mp4`
 
 Output media/wiretap_demo.mp4
 
@@ -103,7 +105,7 @@ Sleep 2s
 Type "curl http://10.2.0.4 --connect-timeout 3" Sleep 1s Enter Sleep 6s
 Type "./wiretap configure --endpoint 10.1.0.2:51820 --routes 10.2.0.0/16,fd:2::/64 -c" Sleep 1s Enter Sleep 4s
 Type "wg-quick up ./wiretap_relay.conf" Sleep 1s Enter Sleep 2s
-Type "wg-quick up ./wiretap_e2ee.conf" Sleep 1s Enter Sleep 2s
+Type "wg-quick up ./wiretap.conf" Sleep 1s Enter Sleep 2s
 
 Ctrl+b
 Left

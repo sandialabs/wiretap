@@ -18,12 +18,13 @@ var (
 	Port               = 51820
 	E2EEPort           = 51821
 	ConfigRelay        = "wiretap_relay.conf"
-	ConfigE2EE         = "wiretap_e2ee.conf"
+	ConfigE2EE         = "wiretap.conf"
 	ConfigServer       = "wiretap_server.conf"
 	Keepalive          = 25
 	MTU                = 1420
 	ShowHidden         = false
 	ApiSubnets         = netip.MustParsePrefix("::/8")
+	ApiV4Subnets       = netip.MustParsePrefix("192.0.2.0/24")
 	ApiPort            = 80
 	ClientRelaySubnet4 = netip.MustParsePrefix("172.16.0.0/16")
 	ClientRelaySubnet6 = netip.MustParsePrefix("fd:16::/40")
@@ -36,6 +37,7 @@ var (
 	SubnetV4Bits       = 24
 	SubnetV6Bits       = 48
 	APIBits            = 16
+	APIV4Bits          = 24
 )
 
 // Define colors.

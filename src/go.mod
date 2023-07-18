@@ -2,9 +2,7 @@ module wiretap
 
 go 1.20
 
-replace golang.zx2c4.com/wireguard => github.com/luker983/wireguard-go v0.0.0-20230405143335-420d4b1d8857
-
-//replace golang.zx2c4.com/wireguard => ../custom-wireguard-go
+replace golang.zx2c4.com/wireguard => github.com/luker983/wireguard-go v0.0.0-20230628150900-2e22d4a23db1
 
 require (
 	github.com/atotto/clipboard v0.1.4
@@ -22,6 +20,7 @@ require (
 )
 
 require (
+	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect

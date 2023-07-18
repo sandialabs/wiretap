@@ -2,7 +2,6 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,8 +19,6 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
-	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 
 	"wiretap/peer"
 	"wiretap/transport"
@@ -66,40 +63,45 @@ type AddAllowedIPsRequest struct {
 	AllowedIPs []net.IPNet
 }
 
+type ExposeTuple struct {
+	RemoteAddr netip.Addr
+	LocalPort  uint
+	RemotePort uint
+	Protocol   string
+}
+type ExposeAction int
+
+const (
+	ExposeActionExpose ExposeAction = iota
+	ExposeActionList
+	ExposeActionDelete
+)
+
+type ExposeRequest struct {
+	Action     ExposeAction
+	LocalPort  uint
+	RemotePort uint
+	Protocol   string
+	Dynamic    bool
+}
+
+type ExposeConn struct {
+	TcpListener *net.Listener
+	UdpConn     *net.UDPConn
+}
+
 var clientAddresses map[uint64]NetworkState
 var serverAddresses map[uint64]NetworkState
 
 // Handle adds rule to top of firewall rules that accepts direct connections to API.
 func Handle(tnet *netstack.Net, devRelay *device.Device, devE2EE *device.Device, relayConfig *peer.Config, e2eeConfig *peer.Config, addr netip.Addr, port uint16, lock *sync.Mutex, ns *NetworkState) {
-	s := tnet.Stack()
-
-	headerFilter := stack.IPHeaderFilter{
-		Protocol:      tcp.ProtocolNumber,
-		CheckProtocol: true,
-		Dst:           tcpip.Address(addr.AsSlice()),
-		DstMask:       tcpip.Address(bytes.Repeat([]byte("\xff"), addr.BitLen()/8)),
-	}
-
-	rule := stack.Rule{
-		Filter: headerFilter,
-		Target: &stack.AcceptTarget{
-			NetworkProtocol: func() tcpip.NetworkProtocolNumber {
-				if addr.Is4() {
-					return ipv4.ProtocolNumber
-				}
-				return ipv6.ProtocolNumber
-			}(),
-		},
-	}
-
-	tid := stack.NATID
-	transport.PushRule(s, rule, tid, addr.Is6())
-	lock.Unlock()
-
 	configs := ServerConfigs{
 		RelayConfig: relayConfig,
 		E2EEConfig:  e2eeConfig,
 	}
+
+	exposeMap := make(map[ExposeTuple]ExposeConn)
+	var exposeLock sync.RWMutex
 
 	serverAddresses = make(map[uint64]NetworkState)
 	clientAddresses = make(map[uint64]NetworkState)
@@ -120,11 +122,17 @@ func Handle(tnet *netstack.Net, devRelay *device.Device, devE2EE *device.Device,
 		log.Panic(err)
 	}
 
+	localAddr := tcpip.FullAddress{
+		NIC:  1,
+		Addr: tcpip.Address(addr.AsSlice()),
+	}
+
 	http.HandleFunc("/ping", wrapApi(handlePing()))
 	http.HandleFunc("/serverinfo", wrapApi(handleServerInfo(configs)))
 	http.HandleFunc("/addpeer", wrapApi(handleAddPeer(devRelay, devE2EE, configs)))
 	http.HandleFunc("/allocate", wrapApi(handleAllocate(ns)))
 	http.HandleFunc("/addallowedips", wrapApi(handleAddAllowedIPs(devRelay, configs)))
+	http.HandleFunc("/expose", wrapApi(handleExpose(tnet, &exposeMap, &exposeLock, localAddr)))
 
 	log.Println("API: API listener up")
 	err = http.Serve(listener, nil)
@@ -211,6 +219,7 @@ func handleAddPeer(devRelay *device.Device, devE2EE *device.Device, config Serve
 		err = p.UnmarshalJSON(body)
 		if err != nil {
 			writeErr(w, err)
+			return
 		}
 
 		// If addresses not assigned, error out, should have been determined from a previous API call.
@@ -350,6 +359,155 @@ func handleAddAllowedIPs(devRelay *device.Device, config ServerConfigs) http.Han
 		if err != nil {
 			writeErr(w, err)
 			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exposeLock *sync.RWMutex, localAddr tcpip.FullAddress) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Parse query parameters.
+		decoder := json.NewDecoder(r.Body)
+		var requestArgs ExposeRequest
+		err := decoder.Decode(&requestArgs)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+
+		remoteAddr, _, _ := net.SplitHostPort(r.RemoteAddr)
+
+		et := ExposeTuple{
+			netip.MustParseAddr(remoteAddr),
+			requestArgs.LocalPort,
+			requestArgs.RemotePort,
+			requestArgs.Protocol,
+		}
+
+		switch requestArgs.Action {
+		// Return list of all exposed ports.
+		case ExposeActionList:
+			exposeLock.RLock()
+			defer exposeLock.RUnlock()
+
+			ett := []ExposeTuple{}
+
+			for k := range *exposeMap {
+				ett = append(ett, k)
+			}
+
+			body, err := json.Marshal(ett)
+			if err != nil {
+				writeErr(w, err)
+				return
+			}
+
+			_, err = w.Write(body)
+			if err != nil {
+				log.Printf("API Error: %v", err)
+			}
+			return
+		// Start exposing port if not already done.
+		case ExposeActionExpose:
+			exposeLock.Lock()
+			defer exposeLock.Unlock()
+
+			_, ok := (*exposeMap)[et]
+			if ok {
+				// Already exists, cancel.
+				writeErr(w, errors.New("port already exposed"))
+				return
+			}
+
+			proto := ipv4.ProtocolNumber
+			if et.RemoteAddr.Is6() {
+				proto = ipv6.ProtocolNumber
+			}
+
+			if requestArgs.Dynamic {
+				// Handle Dynamic.
+				l, err := net.Listen("tcp", fmt.Sprintf(":%d", requestArgs.RemotePort))
+				if err != nil {
+					writeErr(w, err)
+					return
+				}
+
+				// Bind successful, perform dynamic forwarding.
+				go transport.ForwardDynamic(
+					tnet.Stack(),
+					&l,
+					localAddr,
+					tcpip.FullAddress{NIC: 1, Addr: tcpip.Address(et.RemoteAddr.AsSlice())},
+					proto,
+				)
+
+				(*exposeMap)[et] = ExposeConn{TcpListener: &l}
+			} else if requestArgs.Protocol == "tcp" {
+				// Handle TCP.
+				l, err := net.Listen(requestArgs.Protocol, fmt.Sprintf(":%d", requestArgs.RemotePort))
+				if err != nil {
+					writeErr(w, err)
+					return
+				}
+
+				// Bind successful, expose port.
+				go transport.ForwardTcpPort(
+					tnet.Stack(),
+					l,
+					localAddr,
+					tcpip.FullAddress{NIC: 1, Addr: tcpip.Address(et.RemoteAddr.AsSlice()), Port: uint16(et.LocalPort)},
+					proto,
+				)
+
+				(*exposeMap)[et] = ExposeConn{TcpListener: &l}
+			} else {
+				// Handle UDP.
+				addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", requestArgs.RemotePort))
+				if err != nil {
+					writeErr(w, err)
+					return
+				}
+				c, err := net.ListenUDP("udp", addr)
+				if err != nil {
+					writeErr(w, err)
+					return
+				}
+
+				// Bind successful, expose port.
+				go transport.ForwardUdpPort(
+					tnet.Stack(),
+					c,
+					localAddr,
+					tcpip.FullAddress{NIC: 1, Addr: tcpip.Address(et.RemoteAddr.AsSlice()), Port: uint16(et.LocalPort)},
+					proto,
+				)
+
+				(*exposeMap)[et] = ExposeConn{UdpConn: c}
+			}
+
+		// Stop listener and delete from map.
+		case ExposeActionDelete:
+			exposeLock.Lock()
+			defer exposeLock.Unlock()
+
+			c, ok := (*exposeMap)[et]
+			if ok {
+				if et.Protocol == "tcp" && c.TcpListener != nil {
+					(*c.TcpListener).Close()
+				} else if c.UdpConn != nil {
+					c.UdpConn.Close()
+				}
+				delete(*exposeMap, et)
+			} else {
+				writeErr(w, errors.New("not found"))
+				return
+			}
 		}
 
 		w.WriteHeader(http.StatusOK)

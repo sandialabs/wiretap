@@ -16,7 +16,7 @@ In this diagram, the client has generated and installed WireGuard configuration 
 
 1. Download binaries from the [releases](https://github.com/sandialabs/wiretap/releases) page, one for your client machine and one for your server (if different os/arch)
 2. Run `./wiretap configure --port <port> --endpoint <socket> --routes <routes>` with the appropriate arguments
-3. Import the resulting `wiretap_relay.conf` and `wiretap_e2ee.conf` files into WireGuard on the client machine
+3. Import the resulting `wiretap.conf` and `wiretap_relay.conf` files into WireGuard on the client machine
 4. Copy and paste the server command output that best suits your target system into Wiretap on the server machine
 5. Add more servers and clients as needed with the `add` subcommand
 
@@ -79,7 +79,7 @@ PublicKey = kMj7HwfYYFO/XEHNFK2kz9cBd7vTHk63fhygyuYLMzI=
 AllowedIPs = 172.17.0.0/24,fd:17::/48
 ────────────────────────────────
 
-config: wiretap_e2ee.conf
+config: wiretap.conf
 ────────────────────────────────
 [Interface]
 PrivateKey = YCTRVwB4xOEcBtifVmhjMhRYL7+DOlDP5VdHZGclZGg=
@@ -105,12 +105,12 @@ Config File:  ./wiretap serve -f wiretap_server.conf
 > **Note**
 > Wiretap uses 2 WireGuard interfaces per node in order to safely and scalably chain together servers. This means your client will bind to more than one port, but only the Relay Interface port needs to be accessible by the Server. See the [How It Works](#how-it-works) section for details. Use `--simple` if your setup requires a single interface on the client
 
-Install the resulting config either by copying and pasting the output or by importing the new `wiretap_relay.conf` and `wiretap_e2ee.conf` files into WireGuard:
+Install the resulting config either by copying and pasting the output or by importing the new `wiretap.conf` and `wiretap_relay.conf` files into WireGuard:
 
 * If using a GUI, select the menu option similar to *Import Tunnel(s) From File*
-* If you have `wg-quick` installed, `sudo wg-quick up ./wiretap_relay.conf` and `sudo wg-quick up ./wiretap_e2ee.conf`
+* If you have `wg-quick` installed, `sudo wg-quick up ./wiretap.conf` and `sudo wg-quick up ./wiretap_relay.conf`
 
-Don't forget to disable or remove the tunnels when you're done (e.g., `sudo wg-quick down ./wiretap_relay.conf` and `sudo wg-quick down ./wiretap_e2ee.conf`)
+Don't forget to disable or remove the tunnels when you're done (e.g., `sudo wg-quick down ./wiretap.conf` and `sudo wg-quick down ./wiretap_relay.conf`)
 
 ### Deploy
 
@@ -176,7 +176,7 @@ If you plan to attach a server directly to the client, the status command just c
 Configurations successfully generated.
 Import the updated config(s) into WireGuard locally and pass the arguments below to Wiretap on the new remote server.
 
-config: wiretap_e2ee.conf
+config: wiretap.conf
 ────────────────────────────────
 [Interface]
 PrivateKey = YCTRVwB4xOEcBtifVmhjMhRYL7+DOlDP5VdHZGclZGg=
@@ -203,7 +203,7 @@ POSIX Shell:  WIRETAP_RELAY_INTERFACE_PRIVATEKEY=sLERnxT2+VdwwcJOTUHK5fa5sIN7oJ1
 Config File:  ./wiretap serve -f wiretap_server_1.conf
 ```
 
-The client's E2EE configuration will be modified, so you need to reimport it. For example, `wg-quick down ./wiretap_e2ee.conf` and `wg-quick up ./wiretap_e2ee.conf`. If you are attaching a server directly to the client, the Relay interface will also need to be refreshed.
+The client's E2EE configuration will be modified, so you need to reimport it. For example, `wg-quick down ./wiretap.conf` and `wg-quick up ./wiretap.conf`. If you are attaching a server directly to the client, the Relay interface will also need to be refreshed.
 
 Now you can use any of the server command options to deploy Wiretap to the new server. It will then connect to the already existing server.
 
@@ -258,7 +258,7 @@ The `add client` subcommand can be used to share access to the Wiretap network w
 > **Note**
 > All servers must be deployed *before* adding additional clients
 
-Adding a client is very similar to the other commands. It will generate a `wiretap_relay.conf` and `wiretap_e2ee.conf` for sharing. Make sure that all of the first-hop servers (any server directly attached to the original client) can reach or be reached by the new client. Once you get the endpoint information from whoever will be running the new client run:
+Adding a client is very similar to the other commands. It will generate a `wiretap.conf` and `wiretap_relay.conf` for sharing. Make sure that all of the first-hop servers (any server directly attached to the original client) can reach or be reached by the new client. Once you get the endpoint information from whoever will be running the new client run:
 
 ```bash
 ./wiretap add client --port 1337 --endpoint 1.3.3.8:1337
@@ -280,7 +280,7 @@ PublicKey = kMj7HwfYYFO/XEHNFK2kz9cBd7vTHk63fhygyuYLMzI=
 AllowedIPs = 172.17.0.0/24,fd:17::/48
 ────────────────────────────────
 
-config: wiretap_e2ee_1.conf
+config: wiretap_1.conf
 ────────────────────────────────
 [Interface]
 PrivateKey = 8AhL1kDjwBn/IoY4KLd5mMP4GQsyMYNsqYm3aM/bHnE=
@@ -302,6 +302,46 @@ Endpoint = 172.17.0.3:51821
 ```
 
 Send these files and have the recipient import them into WireGuard to have access to everything in the Wiretap network! By default the routes (AllowedIPs) are copied over, but can be modified by the recipient as needed.
+
+### Port Forwarding
+
+> **Warning**
+> Port forwarding exposes services on your local machine to the remote network, use with caution
+
+You can expose a service on the client by using the `expose` subcommand. For example, to allow remote systems to access port 80/tcp on your local machine, you could run:
+
+```
+./wiretap expose --local 80 --remote 8080
+```
+
+Now all Wiretap servers will be bound to port 8080/tcp and proxy connections to your services on port 80/tcp. By default this uses IPv6, so make sure any listening services support IPv6 as well.
+To configure Wiretap to only use IPv4, use the `configure` subcommand's `--disable-ipv6` option. 
+
+To dynamically forward all ports using SOCKS5:
+
+```
+./wiretap expose --dynamic --remote 8080
+```
+
+All servers will spin up a SOCKS5 server on port 8080 and proxy traffic to your local machine and can be used like this:
+
+```
+curl -x socks5://<server-ip>:8080 http://<any-ip>:1337
+```
+
+The destination IP will be rewritten by the server so you can put any address.
+
+#### List
+
+Use `./wiretap expose list` to see all forwarding rules currently configured.
+
+#### Remove
+
+Use `./wiretap remove` with the same arguments used in `expose` to delete a rule. For example, to remove the SOCKS5 example above:
+
+```
+./wiretap expose remove --dynamic --remote 8080
+```
 
 ## How It Works
 
@@ -329,6 +369,7 @@ Usage:
 Available Commands:
   add         Add peer to wiretap
   configure   Build wireguard config
+  expose      Expose local services to servers
   help        Help about any command
   ping        Ping wiretap server API
   serve       Listen and proxy traffic into target network
@@ -353,9 +394,12 @@ Use "wiretap [command] --help" for more information about a command.
     - TCP
         - Transparent connections
         - RST response when port is unreachable
+        - Reverse Port Forward
+        - Reverse Socks5 Support
     - UDP
         - Transparent "connections"
         - ICMP Destination Unreachable when port is unreachable
+        - Reverse Port Forward
 * Application
     - API internal to Wiretap for dynamic configuration
     - Chain servers together to tunnel traffic through an arbitrary number of machines
@@ -460,7 +504,7 @@ Install the newly created WireGuard configs with:
 
 ```bash
 wg-quick up ./wiretap_relay.conf
-wg-quick up ./wiretap_e2ee.conf
+wg-quick up ./wiretap.conf
 ```
 
 Copy and paste the Wiretap arguments printed by the configure command into the server machine prompt. It should look like this:
@@ -540,7 +584,7 @@ To bring down the WireGuard interfaces on the client machine, run:
 
 ```bash
 wg-quick down ./wiretap_relay.conf
-wg-quick down ./wiretap_e2ee.conf
+wg-quick down ./wiretap.conf
 ```
 
 ## Experimental

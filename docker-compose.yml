@@ -55,6 +55,8 @@ services:
     depends_on: 
       - client 
     image: wiretap:latest
+    ports:
+      - "6060:6060"
     networks:
       exposed:
         ipv4_address: 10.1.0.3
