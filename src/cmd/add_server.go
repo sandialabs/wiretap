@@ -218,7 +218,9 @@ func (c addServerCmdConfig) Run() {
 			for _, aip := range p.GetAllowedIPs() {
 				relayAddrs = append(relayAddrs, aip.String())
 			}
-
+		}
+		for _, a := range leafServerConfigRelay.GetAddresses() {
+			relayAddrs = append(relayAddrs, a.String())
 		}
 		err = leafServerPeerConfigRelay.SetAllowedIPs(relayAddrs)
 		check("failed to set allowedIPs", err)

@@ -52,7 +52,7 @@ func init() {
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.outputConfigFileE2EE, "e2ee-output", "", addClientCmdArgs.outputConfigFileE2EE, "filename of output E2EE config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.inputConfigFileRelay, "relay-input", "", addClientCmdArgs.inputConfigFileRelay, "filename of input relay config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.inputConfigFileE2EE, "e2ee-input", "", addClientCmdArgs.inputConfigFileE2EE, "filename of input E2EE config file")
-	addServerCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address of server that new client will connect to. By default new clients connect to existing relay servers")
+	addClientCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address of server that new client will connect to. By default new clients connect to existing relay servers")
 	addClientCmd.Flags().IntVarP(&addClientCmdArgs.mtu, "mtu", "m", addClientCmdArgs.mtu, "tunnel MTU")
 
 	addClientCmd.Flags().SortFlags = false
@@ -75,7 +75,7 @@ func (c addClientCmdConfig) Run() {
 	check("failed to retrieve address allocation from server", err)
 
 	disableV6 := false
-	if len(baseConfigE2EE.GetPeers()[0].GetAllowedIPs()) < 3 {
+	if len(baseConfigE2EE.GetAddresses()) == 1 {
 		disableV6 = true
 	}
 
@@ -116,6 +116,19 @@ func (c addClientCmdConfig) Run() {
 		check("failed to get leaf server info", err)
 		leafServerPeerConfigRelay, err := leafServerConfigRelay.AsPeer()
 		check("failed to parse client server config as peer", err)
+
+		// Search base relay config for this server's relay peer and copy routes.
+	out:
+		for _, p := range baseConfigRelay.GetPeers() {
+			for _, a := range p.GetAllowedIPs() {
+				if a.Contains(leafServerConfigRelay.GetAddresses()[0].IP) {
+					for _, aip := range p.GetAllowedIPs() {
+						leafServerPeerConfigRelay.AddAllowedIPs(aip.String())
+					}
+					break out
+				}
+			}
+		}
 
 		clientConfigRelay.AddPeer(leafServerPeerConfigRelay)
 
