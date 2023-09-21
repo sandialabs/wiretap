@@ -123,7 +123,8 @@ func (c addClientCmdConfig) Run() {
 			for _, a := range p.GetAllowedIPs() {
 				if a.Contains(leafServerConfigRelay.GetAddresses()[0].IP) {
 					for _, aip := range p.GetAllowedIPs() {
-						leafServerPeerConfigRelay.AddAllowedIPs(aip.String())
+						err = leafServerPeerConfigRelay.AddAllowedIPs(aip.String())
+						check("failed to copy routes from leaf server", err)
 					}
 					break out
 				}
