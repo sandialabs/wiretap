@@ -617,3 +617,31 @@ Finally, run Wiretap with the forwarded local port as your endpoint on the serve
 ```bash
 WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRETAP_E2EE_INTERFACE_PRIVATEKEY=<key> WIRETAP_E2EE_PEER_PUBLICKEY=<key> WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve --endpoint localhost:51821
 ```
+
+### Add Clients To Any Server
+
+> **Note**
+> Clients added to arbitrary servers do not currently have the same capabilities as clients added to first-hop servers (the default)
+
+Clients can be attached to any server in the network by using the `--server-address <api-address>` argument when running `wiretap add client`. This allows a client on a different network than the first client to still gain access to all of the Wiretap network's routes. But this has some limitations.
+
+In this example, a new client is added to the second server in the right branch of a Wiretap network. This client will only be able to access routes via the right branch of the network and not the left branch because the branches are only joined through an existing client, which does not route traffic from other clients:
+
+```
+        ┌─────┐
+        │  C  │
+        └┬───┬┘
+         │   │
+    ┌────┴┐ ┌┴────┐
+    │  S  │ │  S  │
+    └──┬──┘ └──┬──┘
+       │       │
+    ┌──┴──┐ ┌──┴──┐
+    │  S  │ │  S  ◄───────┐
+    └─────┘ └─────┘       │
+                       ┌──┴─┐
+                       │ C  │
+                       └────┘
+```
+
+You may also need to manually edit the resulting `wiretap.conf` for the new client to remove any `AllowedIPs` entries that already exist in the new client's host routing table. If the server that the client is attaching to has a route for 10.2.0.0/16, but the Client already has that route (because that's where it lives), then remove the `10.2.0.0/16` entry from the `wiretap.conf` file before importing into WireGuard. Leave the API address and any other routes you wish to access. 
