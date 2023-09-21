@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/netip"
 	"os"
@@ -26,7 +27,7 @@ type addServerCmdConfig struct {
 }
 
 var addServerCmdArgs = addServerCmdConfig{
-	allowedIPs:       []string{ClientRelaySubnet4.String(), ClientRelaySubnet6.String()},
+	allowedIPs:       []string{},
 	serverAddress:    "",
 	configFileRelay:  ConfigRelay,
 	configFileE2EE:   ConfigE2EE,
@@ -210,12 +211,20 @@ func (c addServerCmdConfig) Run() {
 				check("failed to set endpoint", err)
 			}
 		}
-		relayAddrs := []string{ClientRelaySubnet4.String()}
-		if !disableV6 {
-			relayAddrs = append(relayAddrs, ClientRelaySubnet6.String())
+
+		// Make allowed IPs all of current peer's allowed IPs:
+		relayAddrs := []string{}
+		for _, p := range leafServerConfigRelay.GetPeers() {
+			for _, aip := range p.GetAllowedIPs() {
+				relayAddrs = append(relayAddrs, aip.String())
+			}
+		}
+		for _, a := range leafServerConfigRelay.GetAddresses() {
+			relayAddrs = append(relayAddrs, a.String())
 		}
 		err = leafServerPeerConfigRelay.SetAllowedIPs(relayAddrs)
 		check("failed to set allowedIPs", err)
+
 		serverConfigRelay.AddPeer(leafServerPeerConfigRelay)
 		serverConfigE2EE.AddPeer(clientPeerConfigE2EE)
 
@@ -263,30 +272,34 @@ func (c addServerCmdConfig) Run() {
 		err = serverConfigE2EE.SetAddresses([]string{fmt.Sprintf("%s/%d", addresses.ApiAddr.String(), addresses.ApiAddr.BitLen())})
 		check("failed to set addresses", err)
 
-		// Update routes for every node in path to new server (after getting addresses)
-		serverApi := apiAddrPort
-	outer:
-		for serverApi != leafApiAddrPort {
-			relay, _, err := api.ServerInfo(serverApi)
-			check("failed to get server info from intermediate node", err)
+		// Push new route to every server.
+		for _, p := range clientConfigE2EE.GetPeers() {
+			apiAddrPort := netip.AddrPortFrom(p.GetApiAddr(), uint16(ApiPort))
+			// Skip leaf and new peer.
+			if apiAddrPort == leafApiAddrPort || p.GetApiAddr() == serverPeerConfigE2EE.GetApiAddr() {
+				continue
+			}
 
-			for _, p := range relay.GetPeers() {
-				for _, ap := range p.GetAllowedIPs() {
+			relay, _, err := api.ServerInfo(apiAddrPort)
+			if err != nil {
+				log.Println("failed to query server info:", err)
+				continue
+			}
+
+			// Find leaf-facing relay peer and push route.
+		outer:
+			for i, rp := range relay.GetPeers() {
+				for _, ap := range rp.GetAllowedIPs() {
 					if ap.Contains(leafServerConfigRelay.GetAddresses()[0].IP) {
-						err = api.AddAllowedIPs(serverApi, p.GetPublicKey(), serverConfigRelay.GetAddresses())
-						check("failed to add allowedips", err)
-						// Find which of our E2EE peers has an endpoint that matches the first Allowed IP of this peer:
-						for _, e2ee_p := range clientConfigE2EE.GetPeers() {
-							if p.GetAllowedIPs()[0].Contains(e2ee_p.GetEndpoint().IP) {
-								aa := e2ee_p.GetApiAddr()
-								serverApi = netip.MustParseAddrPort(net.JoinHostPort(aa.String(), fmt.Sprint(ApiPort)))
-								continue outer
-							}
-						}
+						err = api.AddAllowedIPs(apiAddrPort, rp.GetPublicKey(), serverPeerConfigRelay.GetAllowedIPs())
+						check("failed to add new client IP to peer", err)
+						break outer
 					}
 				}
+				if i == len(relay.GetPeers())-1 {
+					check("failed to find leaf-facing peer", errors.New("peer's relay interface has no leaf-facing route"))
+				}
 			}
-			check("", errors.New("could not update routes along path, peer not found"))
 		}
 
 		// Leaf server is the relay peer for the new server.

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -93,14 +92,15 @@ func (c statusCmdConfig) Run() {
 		for _, rp := range current.relayConfig.GetPeers() {
 			// Skip client-facing peers.
 			for _, ip := range rp.GetAllowedIPs() {
-				if ClientRelaySubnet4.Contains(netip.MustParseAddr(ip.IP.String())) || ClientRelaySubnet6.Contains(netip.MustParseAddr(ip.IP.String())) {
+				if clientConfigRelay.GetAddresses()[0].Contains(ip.IP) {
 					continue outer
 				}
 			}
 
 			next, ok := nodes[rp.GetPublicKey().String()]
+			// Not a peer we know about. Could be another client or an error.
 			if !ok {
-				check("failed to find relay peer", errors.New("public key not returned by any node"))
+				continue
 			}
 			current.children = append(current.children, &next)
 			findChildren(&next)

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -21,6 +22,7 @@ type addClientCmdConfig struct {
 	inputConfigFileE2EE   string
 	outputConfigFileRelay string
 	outputConfigFileE2EE  string
+	serverAddress         string
 	mtu                   int
 }
 
@@ -29,6 +31,7 @@ var addClientCmdArgs = addClientCmdConfig{
 	inputConfigFileE2EE:   ConfigE2EE,
 	outputConfigFileRelay: ConfigRelay,
 	outputConfigFileE2EE:  ConfigE2EE,
+	serverAddress:         "",
 	mtu:                   MTU,
 }
 
@@ -49,6 +52,7 @@ func init() {
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.outputConfigFileE2EE, "e2ee-output", "", addClientCmdArgs.outputConfigFileE2EE, "filename of output E2EE config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.inputConfigFileRelay, "relay-input", "", addClientCmdArgs.inputConfigFileRelay, "filename of input relay config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.inputConfigFileE2EE, "e2ee-input", "", addClientCmdArgs.inputConfigFileE2EE, "filename of input E2EE config file")
+	addClientCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address of server that new client will connect to. By default new clients connect to existing relay servers")
 	addClientCmd.Flags().IntVarP(&addClientCmdArgs.mtu, "mtu", "m", addClientCmdArgs.mtu, "tunnel MTU")
 
 	addClientCmd.Flags().SortFlags = false
@@ -71,7 +75,7 @@ func (c addClientCmdConfig) Run() {
 	check("failed to retrieve address allocation from server", err)
 
 	disableV6 := false
-	if len(baseConfigE2EE.GetPeers()[0].GetAllowedIPs()) < 3 {
+	if len(baseConfigE2EE.GetAddresses()) == 1 {
 		disableV6 = true
 	}
 
@@ -98,15 +102,45 @@ func (c addClientCmdConfig) Run() {
 	check("failed to generate relay e2ee config", err)
 
 	// Copy peers.
-	for _, p := range baseConfigRelay.GetPeers() {
-		clientConfigRelay.AddPeer(p)
+	leafAddr := baseConfigRelay.GetAddresses()[0].IP
+	if c.serverAddress == "" {
+		for _, p := range baseConfigRelay.GetPeers() {
+			clientConfigRelay.AddPeer(p)
+		}
+	} else {
+		// Get leaf server info
+		leafApiAddr, err := netip.ParseAddr(c.serverAddress)
+		check("invalid server address", err)
+		leafApiAddrPort := netip.AddrPortFrom(leafApiAddr, uint16(ApiPort))
+		leafServerConfigRelay, _, err := api.ServerInfo(leafApiAddrPort)
+		check("failed to get leaf server info", err)
+		leafServerPeerConfigRelay, err := leafServerConfigRelay.AsPeer()
+		check("failed to parse client server config as peer", err)
+
+		// Search base relay config for this server's relay peer and copy routes.
+	out:
+		for _, p := range baseConfigRelay.GetPeers() {
+			for _, a := range p.GetAllowedIPs() {
+				if a.Contains(leafServerConfigRelay.GetAddresses()[0].IP) {
+					for _, aip := range p.GetAllowedIPs() {
+						err = leafServerPeerConfigRelay.AddAllowedIPs(aip.String())
+						check("failed to copy routes from leaf server", err)
+					}
+					break out
+				}
+			}
+		}
+
+		clientConfigRelay.AddPeer(leafServerPeerConfigRelay)
+
+		leafAddr = leafServerConfigRelay.GetAddresses()[0].IP
 	}
 	for _, p := range baseConfigE2EE.GetPeers() {
 		clientConfigE2EE.AddPeer(p)
 	}
 
 	// Push new client peer to all servers.
-	// Relay nodes need a new relay peeer on top of the e2ee peer.
+	// Relay nodes need a new relay peer on top of the e2ee peer.
 	// Relay nodes have a relay peer that matches our baseConfig public key.
 	clientPubKey, err := wgtypes.ParseKey(baseConfigRelay.GetPublicKey())
 	check("failed to get client public key", err)
@@ -151,7 +185,7 @@ func (c addClientCmdConfig) Run() {
 	})
 	check("failed to parse client as peer", err)
 
-	for _, p := range baseConfigE2EE.GetPeers() {
+	for _, p := range clientConfigE2EE.GetPeers() {
 		apiAddrPort := netip.AddrPortFrom(p.GetApiAddr(), uint16(ApiPort))
 		relay, _, err := api.ServerInfo(apiAddrPort)
 		if err != nil {
@@ -164,9 +198,25 @@ func (c addClientCmdConfig) Run() {
 		check("failed to add peer", err)
 
 		// This is a relay node.
-		if relay.GetPeer(clientPubKey) != nil {
+		if (relay.GetPeer(clientPubKey) != nil && c.serverAddress == "") || (c.serverAddress == p.GetApiAddr().String()) {
 			err = api.AddRelayPeer(apiAddrPort, clientPeerConfigRelay)
 			check("failed to add peer", err)
+		} else {
+			// This is an e2ee node. Add client IP to client/leaf-facing relay peer.
+			// Find client-facing relay peer.
+		outer:
+			for i, rp := range relay.GetPeers() {
+				for _, ap := range rp.GetAllowedIPs() {
+					if ap.Contains(leafAddr) {
+						err = api.AddAllowedIPs(apiAddrPort, rp.GetPublicKey(), clientPeerConfigRelay.GetAllowedIPs())
+						check("failed to add new client IP to peer", err)
+						break outer
+					}
+				}
+				if i == len(relay.GetPeers())-1 {
+					check("failed to find client-facing peer", errors.New("peer's relay interface has no client-facing route"))
+				}
+			}
 		}
 	}
 
