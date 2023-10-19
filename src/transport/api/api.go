@@ -124,7 +124,7 @@ func Handle(tnet *netstack.Net, devRelay *device.Device, devE2EE *device.Device,
 
 	localAddr := tcpip.FullAddress{
 		NIC:  1,
-		Addr: tcpip.Address(addr.AsSlice()),
+		Addr: tcpip.AddrFromSlice(addr.AsSlice()),
 	}
 
 	http.HandleFunc("/ping", wrapApi(handlePing()))
@@ -443,7 +443,7 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 					tnet.Stack(),
 					&l,
 					localAddr,
-					tcpip.FullAddress{NIC: 1, Addr: tcpip.Address(et.RemoteAddr.AsSlice())},
+					tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(et.RemoteAddr.AsSlice())},
 					proto,
 				)
 
@@ -461,7 +461,7 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 					tnet.Stack(),
 					l,
 					localAddr,
-					tcpip.FullAddress{NIC: 1, Addr: tcpip.Address(et.RemoteAddr.AsSlice()), Port: uint16(et.LocalPort)},
+					tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(et.RemoteAddr.AsSlice()), Port: uint16(et.LocalPort)},
 					proto,
 				)
 
@@ -484,7 +484,7 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 					tnet.Stack(),
 					c,
 					localAddr,
-					tcpip.FullAddress{NIC: 1, Addr: tcpip.Address(et.RemoteAddr.AsSlice()), Port: uint16(et.LocalPort)},
+					tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(et.RemoteAddr.AsSlice()), Port: uint16(et.LocalPort)},
 					proto,
 				)
 

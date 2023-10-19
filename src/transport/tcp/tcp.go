@@ -46,7 +46,7 @@ func Handler(c Config) func(*tcp.ForwarderRequest) {
 		log.Printf("(client %s) - Transport: TCP -> %s", net.JoinHostPort(s.RemoteAddress.String(), fmt.Sprint(s.RemotePort)), net.JoinHostPort(s.LocalAddress.String(), fmt.Sprint(s.LocalPort)))
 
 		// Add address to stack.
-		addr, _ := netip.AddrFromSlice(net.IP(s.LocalAddress))
+		addr, _ := netip.AddrFromSlice(s.LocalAddress.AsSlice())
 		err := transport.GetConnCounts().AddAddress(addr, c.Tnet.Stack(), c.StackLock)
 		if err != nil {
 			log.Println("failed to add address:", err)

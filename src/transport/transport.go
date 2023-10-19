@@ -66,7 +66,7 @@ func (c *ConnCounts) AddAddress(addr netip.Addr, s *stack.Stack, stackLock *sync
 	}
 	protoAddr := tcpip.ProtocolAddress{
 		Protocol:          protoNumber,
-		AddressWithPrefix: tcpip.Address(addr.AsSlice()).WithPrefix(),
+		AddressWithPrefix: tcpip.AddrFromSlice(addr.AsSlice()).WithPrefix(),
 	}
 
 	stackLock.Lock()
@@ -106,7 +106,7 @@ func (c *ConnCounts) RemoveAddress(addr netip.Addr, s *stack.Stack, stackLock *s
 	delete(c.counts, addr)
 
 	stackLock.Lock()
-	err := s.RemoveAddress(1, tcpip.Address(addr.AsSlice()))
+	err := s.RemoveAddress(1, tcpip.AddrFromSlice(addr.AsSlice()))
 	stackLock.Unlock()
 
 	if err != nil {

@@ -153,7 +153,7 @@ func sendEchoResponse(s *stack.Stack, pkt header.Network) {
 	var ipHeader []byte
 	var err error
 
-	isIpv6 := pkt.DestinationAddress().To4() == ""
+	isIpv6 := pkt.DestinationAddress().To4() == tcpip.Address{}
 
 	netProto := ipv4.ProtocolNumber
 	if isIpv6 {

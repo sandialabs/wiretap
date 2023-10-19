@@ -77,7 +77,7 @@ func listenNet(tnet *netstack.Net, network string, port int) (*gonet.UDPConn, in
 	}
 
 	addr := netip.AddrPortFrom(ip, uint16(port))
-	conn, err := gonet.DialUDP(tnet.Stack(), &tcpip.FullAddress{NIC: 1, Addr: tcpip.Address([]byte{}), Port: addr.Port()}, nil, pn)
+	conn, err := gonet.DialUDP(tnet.Stack(), &tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice([]byte{}), Port: addr.Port()}, nil, pn)
 	if err != nil {
 		return nil, 0, err
 	}
