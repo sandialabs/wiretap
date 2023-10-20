@@ -271,7 +271,7 @@ func ForwardDynamic(s *stack.Stack, l *net.Listener, localAddr tcpip.FullAddress
 			return nil, err
 		}
 
-		dport, err := strconv.Atoi(port)
+		dport, err := strconv.ParseUint(port, 10, 16)
 		if err != nil {
 			return nil, err
 		}
