@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
+	"log"
 
 	"github.com/fatih/color"
 	"github.com/m1gwings/treedrawer/tree"
@@ -77,11 +78,20 @@ func (c statusCmdConfig) Run() {
 	e2ee_peer_list := clientConfigE2EE.GetPeers()
 	for _, ep := range e2ee_peer_list {
 		relayConfig, e2eeConfig, err := api.ServerInfo(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
-		check("failed to fetch node's configuration as peer", err)
-		nodes[relayConfig.GetPublicKey()] = Node{
-			peerConfig:  ep,
-			relayConfig: relayConfig,
-			e2eeConfig:  e2eeConfig,
+		if err != nil {
+			message := "failed to fetch node's configuration as peer"
+			log.Printf("%s: %v", message, err)
+			nodes["TIMEOUT"] = Node{
+                        	peerConfig:  ep,
+                	        relayConfig: relayConfig,
+        	                e2eeConfig:  e2eeConfig,
+	                }
+		} else {
+			nodes[relayConfig.GetPublicKey()] = Node{
+				peerConfig:  ep,
+				relayConfig: relayConfig,
+				e2eeConfig:  e2eeConfig,
+			}
 		}
 	}
 
@@ -111,8 +121,8 @@ func (c statusCmdConfig) Run() {
 	// Use node tree to build diagram tree.
 	t.AddChild(tree.NodeString(fmt.Sprintf(`client
 
-  relay: %v... 
-   e2ee: %v... 
+  relay: %v...
+   e2ee: %v...
 `, client.relayConfig.GetPublicKey()[:8], client.e2eeConfig.GetPublicKey()[:8])))
 
 	// Closest peers should be at the top
@@ -129,10 +139,10 @@ func (c statusCmdConfig) Run() {
 				}
 			}
 			t.AddChild(tree.NodeString(fmt.Sprintf(`server
-  relay: %v... 
-   e2ee: %v... 
+  relay: %v...
+   e2ee: %v...
    
-    api: %v 
+    api: %v
  routes: %v `, c.relayConfig.GetPublicKey()[:8], c.e2eeConfig.GetPublicKey()[:8], api, strings.Join(ips, ","))))
 			child, err := t.Child(0)
 			check("could not build tree", err)
