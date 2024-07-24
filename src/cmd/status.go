@@ -81,11 +81,6 @@ func (c statusCmdConfig) Run() {
 		if err != nil {
 			message := "failed to fetch node's configuration as peer"
 			log.Printf("%s: %v", message, err)
-			nodes["TIMEOUT"] = Node{
-                        	peerConfig:  ep,
-                	        relayConfig: relayConfig,
-        	                e2eeConfig:  e2eeConfig,
-	                }
 		} else {
 			nodes[relayConfig.GetPublicKey()] = Node{
 				peerConfig:  ep,
