@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
+	"log"
 
 	"github.com/fatih/color"
 	"github.com/m1gwings/treedrawer/tree"
@@ -77,11 +78,15 @@ func (c statusCmdConfig) Run() {
 	e2ee_peer_list := clientConfigE2EE.GetPeers()
 	for _, ep := range e2ee_peer_list {
 		relayConfig, e2eeConfig, err := api.ServerInfo(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
-		check("failed to fetch node's configuration as peer", err)
-		nodes[relayConfig.GetPublicKey()] = Node{
-			peerConfig:  ep,
-			relayConfig: relayConfig,
-			e2eeConfig:  e2eeConfig,
+		if err != nil {
+			message := "failed to fetch node's configuration as peer"
+			log.Printf("%s: %v", message, err)
+		} else {
+			nodes[relayConfig.GetPublicKey()] = Node{
+				peerConfig:  ep,
+				relayConfig: relayConfig,
+				e2eeConfig:  e2eeConfig,
+			}
 		}
 	}
 

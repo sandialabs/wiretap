@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strings"
+	"time"
 
 	"wiretap/peer"
 	serverapi "wiretap/transport/api"
@@ -27,7 +28,7 @@ type request struct {
 
 // MakeRequest attempts to send an API query to the Wiretap server.
 func makeRequest(req request) ([]byte, error) {
-	client := &http.Client{}
+	client := &http.Client{Timeout: 3 * time.Second}
 	reqBody := bytes.NewBuffer(req.Body)
 
 	r, err := http.NewRequest(req.Method, req.URL, reqBody)
