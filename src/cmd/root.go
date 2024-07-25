@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/netip"
 	"os"
+	"strings"
+	"strconv"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -83,4 +85,12 @@ func check(message string, err error) {
 	if err != nil {
 		log.Fatalf("%s: %v", message, err)
 	}
+}
+
+// Extract the port from the endpoint string 
+func portFromEndpoint(endpoint string) int {
+	strPort := strings.Split(endpoint, ":")[1];
+	p, err := strconv.Atoi(strPort);
+    check("cannot extract port from endpoint argument", err);
+	return p;
 }

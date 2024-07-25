@@ -51,16 +51,19 @@ If you want to compile it yourself or can't find the OS/ARCH you're looking for,
 On the client machine, run Wiretap in configure mode to build a config
 
 ```bash
-./wiretap configure --port <port> --endpoint <socket> --routes <routes>
+./wiretap configure --endpoint <socket> --port <port> --routes <routes>
 ```
 
-* `--port` sets the listening port of the Client's Relay interface. It's set to 51820 by default. Note that the E2EE listening port does not need to be accessible to the Server
 * `--endpoint` tells the Server how to connect to the Client's Relay interface (the E2EE interfaces already know how to talk to each other if the Relay interfaces are working)
-* `--routes` is the equivalent of WireGuard's AllowedIPs setting. This tells the Client to route traffic that matches these IP ranges through Wiretap
+* `--port` sets the listening port of the Client's Relay interface. It's set to the same port specified in the `--endpoint` socket argument by default. Note that the E2EE listening port (51821) does not need to be accessible to the Server
+* `--routes` is the equivalent of WireGuard's AllowedIPs setting. This tells the Client to route traffic that matches these IP ranges through Wiretap. The default is 0.0.0.0/0, which will route all IPv4 traffic. 
+
+> **Note**
+> The default route of 0.0.0.0/0 will likely cause problems if the wiretap server is on the other side of an existing VPN connection. It may also cause other strange networking issues in other situations that are hard to predict. To be safe always specify a specific set of routes.
 
 Following the example in the diagram:
 ```bash
-./wiretap configure --port 1337 --endpoint 1.3.3.7:1337 --routes 10.0.0.0/24
+./wiretap configure --endpoint 1.3.3.7:1337 --port 1337 --routes 10.0.0.0/24
 ```
 ```
 Configurations successfully generated.
@@ -103,7 +106,13 @@ Config File:  ./wiretap serve -f wiretap_server.conf
 ```
 
 > **Note**
-> Wiretap uses 2 WireGuard interfaces per node in order to safely and scalably chain together servers. This means your client will bind to more than one port, but only the Relay Interface port needs to be accessible by the Server. See the [How It Works](#how-it-works) section for details. Use `--simple` if your setup requires a single interface on the client
+> Wiretap uses 2 WireGuard interfaces per node in order to safely and scalably chain together servers. This means your client will bind to more than one port, but only the Relay Interface port needs to be accessible by the Server. See the [How It Works](#how-it-works) section for details. Use `--simple` in both the `config` command and the server's `serve` command if your setup requires a single interface on the client
+
+> **Note**
+> The wiretap_server.conf file uses a notation unique to Wiretap. It cannot be used to start a wiretap server with wg-quick or other tools. 
+
+> **Tip**
+> You can modify the AllowedIPs in the wireatp.conf file any time after generating the config files, just reload the config file with `wg-quick down/up` after making the change. No changes are needed on the server to update them. 
 
 Install the resulting config either by copying and pasting the output or by importing the new `wiretap.conf` and `wiretap_relay.conf` files into WireGuard:
 
@@ -137,7 +146,7 @@ Now the client should be able to interact with the `routes` specified in the `co
 The `add server` subcommand is meant to extend the Wiretap network to reach new areas of a target network. One client and at least one server must be configured and deployed before adding another server. Servers can attach to any other server *or* the client itself.
 
 > **Note**
-> All servers must be deployed *before* adding additional clients
+> All servers must be deployed *before* adding additional clients. Additionally, if a Wiretap server process exits or dies for any reason it will not remember any added clients when you restart it. 
 
 You can view the state of the network and see API addresses with `./wiretap status`
 
@@ -167,7 +176,7 @@ You can view the state of the network and see API addresses with `./wiretap stat
   ╰─────────────────────╯
 ```
 
-If you plan to attach a server directly to the client, the status command just confirms that everything is working as expected and the network layout is correct. If you want to attach a server to another server you must specify the API address in your `add server` command. In the example, we will want to attach to the server with API address `::2`. This command will generate a configuration you can deploy to the new server (through environment variables or a config), just like with the `configure` command:
+If you plan to attach a server directly to the client, the status command just confirms that everything is working as expected and the network layout is correct. If you want to attach a server to another server you must specify the API address in your `add server` command; this must reference the same Wiretap server specified by the `--endpoint` socket. In the example, we will want to attach to the server with API address `::2`. This command will generate a configuration you can deploy to the new server (through environment variables or a config), just like with the `configure` command:
 
 ```bash
 ./wiretap add server --server-address ::2 --endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
@@ -203,7 +212,7 @@ POSIX Shell:  WIRETAP_RELAY_INTERFACE_PRIVATEKEY=sLERnxT2+VdwwcJOTUHK5fa5sIN7oJ1
 Config File:  ./wiretap serve -f wiretap_server_1.conf
 ```
 
-The client's E2EE configuration will be modified, so you need to reimport it. For example, `wg-quick down ./wiretap.conf` and `wg-quick up ./wiretap.conf`. If you are attaching a server directly to the client, the Relay interface will also need to be refreshed.
+The client's E2EE configuration will be modified to allow communication with the new server, so you need to reimport it. For example, `wg-quick down ./wiretap.conf` and `wg-quick up ./wiretap.conf`. If you are attaching a server directly to the client, the Relay interface will also need to be refreshed.
 
 Now you can use any of the server command options to deploy Wiretap to the new server. It will then connect to the already existing server.
 
@@ -256,12 +265,12 @@ Now the client can reach `10.0.0.0/24` and `10.0.1.0/24`. From here you can atta
 The `add client` subcommand can be used to share access to the Wiretap network with others.
 
 > **Note**
-> All servers must be deployed *before* adding additional clients
+> All servers must be deployed *before* adding additional clients. Additionally, if a Wiretap server process exits or dies for any reason it will not remember any added clients when you restart it. 
 
-Adding a client is very similar to the other commands. It will generate a `wiretap.conf` and `wiretap_relay.conf` for sharing. Make sure that all of the first-hop servers (any server directly attached to the original client) can reach or be reached by the new client. Once you get the endpoint information from whoever will be running the new client run:
+Adding a client is very similar to the other commands. It will generate a `wiretap.conf` and `wiretap_relay.conf` for sharing. Make sure that all of the first-hop servers (any server directly attached to the original client) can reach or be reached by the new client or else the new client won't have access to that chain of servers. Once you get the endpoint information from whoever will be running the new client run: 
 
 ```bash
-./wiretap add client --port 1337 --endpoint 1.3.3.8:1337
+./wiretap add client --endpoint 1.3.3.8:1337 --port 1337
 ```
 ```
 Configurations successfully generated.
@@ -317,6 +326,9 @@ You can expose a service on the client by using the `expose` subcommand. For exa
 Now all Wiretap servers will be bound to port 8080/tcp and proxy connections to your services on port 80/tcp. By default this uses IPv6, so make sure any listening services support IPv6 as well.
 To configure Wiretap to only use IPv4, use the `configure` subcommand's `--disable-ipv6` option. 
 
+> **Note**
+> If a Wiretap server process exits or dies for any reason it will not remember ports it was previously exposing. You will need to re-expose any ports you configured with this command.
+
 To dynamically forward all ports using SOCKS5:
 
 ```
@@ -337,7 +349,7 @@ Use `./wiretap expose list` to see all forwarding rules currently configured.
 
 #### Remove
 
-Use `./wiretap remove` with the same arguments used in `expose` to delete a rule. For example, to remove the SOCKS5 example above:
+Use `./wiretap expose remove` with the same arguments used in `expose` to delete a rule. For example, to remove the SOCKS5 example above:
 
 ```
 ./wiretap expose remove --dynamic --remote 8080
@@ -413,30 +425,36 @@ The demo has four hosts and three networks for testing multi-hop/nested tunnels,
 ┌──────────┐
 │ client   │
 │          │
-│ 10.1.0.2 │
-│ fd:1::2  ├┬───────────────────────┐
-├──────────┼│ exposed network       │
-├──────────┼│ 10.1.0.0/16,fd:1::/64 │
-│ 10.1.0.3 ├┴───────────────────────┘
-│ fd:1::3  │
+│ 10.1.0.2 ├┬───────────────────────┐
+│ fd:1::2  ---                      │
+└──────────┼│                       │
+           ││ exposed network       │
+           ││ 10.1.0.0/16,fd:1::/64 │
+┌──────────┼│                       │
+│ 10.1.0.3 ---                      │
+│ fd:1::3  ├┴───────────────────────┘
 │          │
 │ server   │
 │          │
-│ 10.2.0.3 │
-│ fd:2::3  ├┬───────────────────────┐
-├──────────┼│ target network        │
-├──────────┼│ 10.2.0.0/16,fd:2::/64 │
-│ 10.2.0.4 ├┴───────────────────────┘
-│ fd:2::4  │
+│ 10.2.0.3 ├┬───────────────────────┐
+│ fd:2::3  ---                      |
+└──────────┼│                       │
+           ││ target network        │
+           ││ 10.2.0.0/16,fd:2::/64 │
+┌──────────┼│                       │
+│ 10.2.0.4 ---                      |
+│ fd:2::4  ├┴───────────────────────┘
 │          │
 │ target   │
 │          │
-│ 10.3.0.4 │
-│ fd:3::4  ├┬───────────────────────┐
-├──────────┼│ target2 network       │
-├──────────┼│ 10.3.0.0/16,fd:3::/64 │
-│ 10.3.0.5 ├┴───────────────────────┘
-│ fd:3::5  │
+│ 10.3.0.4 ├┬───────────────────────┐
+│ fd:3::4  ---                      |
+└──────────┼│                       │
+           ││ target2 network       │
+           ││ 10.3.0.0/16,fd:3::/64 │
+┌──────────┼│                       │
+│ 10.3.0.5 ---                      |
+│ fd:3::5  ├┴───────────────────────┘
 │          │
 │ target2  │
 └──────────┘
@@ -491,9 +509,10 @@ server$ curl http://10.2.0.4
 
 #### Configure
 
-Configure Wiretap from the client machine. Remember, `--endpoint` is how the server machine should reach the client and `--routes` determines which traffic is routed through Wiretap.
+Configure Wiretap from the client machine. Remember, `--endpoint` is how the server machine should reach the client (IP:port) and `--routes` determines which traffic is routed through Wiretap.
 
-* `--endpoint` needs to be the client address and the default WireGuard port: `10.1.0.2:51820`
+* `--endpoint` needs to be the client address and listening port: `10.1.0.2:51820`
+* If no `--port` is specified, the client config will use the same port specified in the `endpoint` argument as the listening port. In this example, that would be 51820. 
 * `--routes` needs to be the subnet of the target network: `10.2.0.0/16`. But there is also an IPv6 subnet, so we should also put `fd:2::/64`. If you just wanted to route traffic to the target host, you could put `10.2.0.4/32` here instead
 
 ```bash
@@ -625,23 +644,23 @@ WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRE
 
 Clients can be attached to any server in the network by using the `--server-address <api-address>` argument when running `wiretap add client`. This allows a client on a different network than the first client to still gain access to all of the Wiretap network's routes. But this has some limitations.
 
-In this example, a new client is added to the second server in the right branch of a Wiretap network. This client will only be able to access routes via the right branch of the network and not the left branch because the branches are only joined through an existing client, which does not route traffic from other clients:
+In this example, a new client (C2) is added to the second server in the right branch of a Wiretap network. This client will only be able to access routes via the right branch of the network (S3 and S4) and not the left branch (S1 or S2) because the branches are only joined through an existing client (C1), which does not route traffic from other clients:
 
 ```
-        ┌─────┐
-        │  C  │
-        └┬───┬┘
-         │   │
-    ┌────┴┐ ┌┴────┐
-    │  S  │ │  S  │
-    └──┬──┘ └──┬──┘
-       │       │
-    ┌──┴──┐ ┌──┴──┐
-    │  S  │ │  S  ◄───────┐
-    └─────┘ └─────┘       │
-                       ┌──┴─┐
-                       │ C  │
-                       └────┘
+         ┌──────┐
+         │  C1  │
+         └┬────┬┘
+          │    │
+    ┌─────┴┐  ┌┴─────┐
+    │  S1  │  │  S3  │
+    └──┬───┘  └──┬───┘
+       │         │
+    ┌──┴───┐  ┌──┴───┐
+    │  S2  │  │  S4  ◄───────┐
+    └──────┘  └──────┘       │
+                          ┌──┴───┐
+                          │  C2  │
+                          └──────┘
 ```
 
 You may also need to manually edit the resulting `wiretap.conf` for the new client to remove any `AllowedIPs` entries that already exist in the new client's host routing table. If the server that the client is attaching to has a route for 10.2.0.0/16, but the Client already has that route (because that's where it lives), then remove the `10.2.0.0/16` entry from the `wiretap.conf` file before importing into WireGuard. Leave the API address and any other routes you wish to access. 

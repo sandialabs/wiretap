@@ -78,6 +78,18 @@ func (c addClientCmdConfig) Run() {
 	if len(baseConfigE2EE.GetAddresses()) == 1 {
 		disableV6 = true
 	}
+	
+	//Set deefault port to be the same as the port specified in the endpoint
+	/*
+	if addArgs.port == -1 {
+		strPort := strings.Split(addArgs.endpoint, ":")[1];
+		addArgs.port, err = strconv.Atoi(strPort);
+	    check("cannot extract port from endpoint argument", err);
+	}
+	*/
+	if addArgs.port == -1 {
+		addArgs.port = portFromEndpoint(addArgs.endpoint);
+	}
 
 	// Make new configs for client.
 	relayAddrs := []string{addresses.NextClientRelayAddr4.String() + "/32"}
@@ -85,7 +97,7 @@ func (c addClientCmdConfig) Run() {
 		relayAddrs = append(relayAddrs, addresses.NextClientRelayAddr6.String()+"/128")
 	}
 	clientConfigRelay, err := peer.GetConfig(peer.ConfigArgs{
-		ListenPort: addCmdArgs.port,
+		ListenPort: addArgs.port,
 		Addresses:  relayAddrs,
 	})
 	check("failed to generate client relay config", err)
