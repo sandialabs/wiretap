@@ -229,7 +229,6 @@ func init() {
 				"public-e2ee",
 				"endpoint-relay",
 				"endpoint-e2ee",
-				"port",
 				"allowed",
 				"ipv4-relay",
 				"ipv6-relay",
