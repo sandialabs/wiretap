@@ -56,10 +56,7 @@ On the client machine, run Wiretap in configure mode to build a config
 
 * `--endpoint` tells the Server how to connect to the Client's Relay interface (the E2EE interfaces already know how to talk to each other if the Relay interfaces are working)
 * `--port` sets the listening port of the Client's Relay interface. It's set to the same port specified in the `--endpoint` socket argument by default. Note that the E2EE listening port (51821) does not need to be accessible to the Server
-* `--routes` is the equivalent of WireGuard's AllowedIPs setting. This tells the Client to route traffic that matches these IP ranges through Wiretap. The default is 0.0.0.0/0, which will route all IPv4 traffic. 
-
-> **Note**
-> The default route of 0.0.0.0/0 will likely cause problems if the wiretap server is on the other side of an existing VPN connection. It may also cause other strange networking issues in other situations that are hard to predict. To be safe always specify a specific set of routes.
+* `--routes` is the equivalent of WireGuard's AllowedIPs setting. This tells the Client to route traffic that matches these IP ranges through Wiretap.
 
 Following the example in the diagram:
 ```bash
@@ -105,14 +102,14 @@ POSIX Shell:  WIRETAP_RELAY_INTERFACE_PRIVATEKEY=WDH8F6rSUZDyQFfEsRjWLCnapU254qr
 Config File:  ./wiretap serve -f wiretap_server.conf
 ```
 
-> **Note**
+> [!NOTE]
 > Wiretap uses 2 WireGuard interfaces per node in order to safely and scalably chain together servers. This means your client will bind to more than one port, but only the Relay Interface port needs to be accessible by the Server. See the [How It Works](#how-it-works) section for details. Use `--simple` in both the `config` command and the server's `serve` command if your setup requires a single interface on the client
 
-> **Note**
+> [!NOTE]
 > The wiretap_server.conf file uses a notation unique to Wiretap. It cannot be used to start a wiretap server with wg-quick or other tools. 
 
-> **Tip**
-> You can modify the AllowedIPs in the wireatp.conf file any time after generating the config files, just reload the config file with `wg-quick down/up` after making the change. No changes are needed on the server to update them. 
+> [!TIP]
+> You can modify the AllowedIPs in the wiretap.conf file any time after generating the config files, just reload the config file with `wg-quick down/up` after making the change. No changes are needed on the server to update them. 
 
 Install the resulting config either by copying and pasting the output or by importing the new `wiretap.conf` and `wiretap_relay.conf` files into WireGuard:
 
@@ -145,7 +142,7 @@ Now the client should be able to interact with the `routes` specified in the `co
 
 The `add server` subcommand is meant to extend the Wiretap network to reach new areas of a target network. One client and at least one server must be configured and deployed before adding another server. Servers can attach to any other server *or* the client itself.
 
-> **Note**
+> [!WARNING]
 > All servers must be deployed *before* adding additional clients. Additionally, if a Wiretap server process exits or dies for any reason it will not remember any added clients when you restart it. 
 
 You can view the state of the network and see API addresses with `./wiretap status`
@@ -176,7 +173,9 @@ You can view the state of the network and see API addresses with `./wiretap stat
   ╰─────────────────────╯
 ```
 
-If you plan to attach a server directly to the client, the status command just confirms that everything is working as expected and the network layout is correct. If you want to attach a server to another server you must specify the API address in your `add server` command; this must reference the same Wiretap server specified by the `--endpoint` socket. In the example, we will want to attach to the server with API address `::2`. This command will generate a configuration you can deploy to the new server (through environment variables or a config), just like with the `configure` command:
+If you plan to attach a server directly to the client, the status command just confirms that everything is working as expected and the network layout is correct. If you want to attach a server to another server you must also specify the existing server's API address in your `add server` command with the `--server-address` argument; this API address must reference the same Wiretap server that the new server will connect to via the `--endpoint` socket. 
+
+In the example, we will want to attach to the server with API address `::2`, which is listening on `10.0.0.2:51820`. This command will generate a configuration you can deploy to the new server (through environment variables or a config), just like with the `configure` command:
 
 ```bash
 ./wiretap add server --server-address ::2 --endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
@@ -264,7 +263,7 @@ Now the client can reach `10.0.0.0/24` and `10.0.1.0/24`. From here you can atta
 
 The `add client` subcommand can be used to share access to the Wiretap network with others.
 
-> **Note**
+> [!WARNING]
 > All servers must be deployed *before* adding additional clients. Additionally, if a Wiretap server process exits or dies for any reason it will not remember any added clients when you restart it. 
 
 Adding a client is very similar to the other commands. It will generate a `wiretap.conf` and `wiretap_relay.conf` for sharing. Make sure that all of the first-hop servers (any server directly attached to the original client) can reach or be reached by the new client or else the new client won't have access to that chain of servers. Once you get the endpoint information from whoever will be running the new client run: 
@@ -326,7 +325,7 @@ You can expose a service on the client by using the `expose` subcommand. For exa
 Now all Wiretap servers will be bound to port 8080/tcp and proxy connections to your services on port 80/tcp. By default this uses IPv6, so make sure any listening services support IPv6 as well.
 To configure Wiretap to only use IPv4, use the `configure` subcommand's `--disable-ipv6` option. 
 
-> **Note**
+> [!WARNING]
 > If a Wiretap server process exits or dies for any reason it will not remember ports it was previously exposing. You will need to re-expose any ports you configured with this command.
 
 To dynamically forward all ports using SOCKS5:
@@ -610,7 +609,7 @@ wg-quick down ./wiretap.conf
 
 ### TCP Tunneling
 
-> **Note**
+> [!WARNING]
 > Performance will suffer, only use TCP Tunneling as a last resort
 
 If you have *no* outbound or inbound UDP access, you can still use Wiretap, but you'll need to tunnel WireGuard traffic through TCP. This should only be used as a last resort. From WireGuard's [Known Limitations](https://www.wireguard.com/known-limitations/) page:
@@ -639,7 +638,7 @@ WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRE
 
 ### Add Clients To Any Server
 
-> **Note**
+> [!NOTE]
 > Clients added to arbitrary servers do not currently have the same capabilities as clients added to first-hop servers (the default)
 
 Clients can be attached to any server in the network by using the `--server-address <api-address>` argument when running `wiretap add client`. This allows a client on a different network than the first client to still gain access to all of the Wiretap network's routes. But this has some limitations.

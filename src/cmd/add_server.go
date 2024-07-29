@@ -307,7 +307,7 @@ func (c addServerCmdConfig) Run() {
 	}
 	
 	// Use a reasonable default for server listening ports
-	if addArgs.port == -1 {
+	if addArgs.port == USE_ENDPOINT_PORT {
 		addArgs.port = Port;
 	}
 

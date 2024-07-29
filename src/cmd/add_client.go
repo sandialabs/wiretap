@@ -79,14 +79,6 @@ func (c addClientCmdConfig) Run() {
 		disableV6 = true
 	}
 	
-	//Set deefault port to be the same as the port specified in the endpoint
-	/*
-	if addArgs.port == -1 {
-		strPort := strings.Split(addArgs.endpoint, ":")[1];
-		addArgs.port, err = strconv.Atoi(strPort);
-	    check("cannot extract port from endpoint argument", err);
-	}
-	*/
 	if addArgs.port == -1 {
 		addArgs.port = portFromEndpoint(addArgs.endpoint);
 	}
