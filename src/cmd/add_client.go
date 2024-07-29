@@ -79,7 +79,7 @@ func (c addClientCmdConfig) Run() {
 		disableV6 = true
 	}
 	
-	if addArgs.port == -1 {
+	if addArgs.port == USE_ENDPOINT_PORT {
 		addArgs.port = portFromEndpoint(addArgs.endpoint);
 	}
 
