@@ -83,7 +83,7 @@ func GetNextPrefixesForPeers(peers []PeerConfig) []netip.Prefix {
 
 // Add number to filename if it already exists.
 func FindAvailableFilename(f string) string {
-	count := 1
+	count := 2
 	ext := filepath.Ext(f)
 	basename := strings.TrimSuffix(f, ext)
 	for {
@@ -91,7 +91,7 @@ func FindAvailableFilename(f string) string {
 		if os.IsNotExist(err) {
 			break
 		}
-		f = fmt.Sprintf("%s_%d%s", basename, count, ext)
+		f = fmt.Sprintf("%s%d%s", basename, count, ext)
 		count += 1
 	}
 
