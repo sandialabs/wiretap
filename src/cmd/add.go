@@ -18,7 +18,7 @@ type addCmdConfig struct {
 var addCmdArgs = addCmdConfig{
 	endpoint:  Endpoint,
 	outbound:  false,
-	port:      -1,
+	port:      USE_ENDPOINT_PORT,
 	keepalive: Keepalive,
 }
 
