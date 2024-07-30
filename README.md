@@ -619,21 +619,25 @@ If you have *no* outbound or inbound UDP access, you can still use Wiretap, but 
 
 Another great tool that has similar cross-platform capabilities to Wiretap is [Chisel](https://github.com/jpillora/chisel). We can use chisel to forward a UDP port to the remote system over TCP. To use:
 
-Run chisel server on the client system, specifying a TCP port you can reach from the server system:
+Run `chisel server` on the wiretap client system, specifying a TCP port you can reach from the server system:
 ```bash
 ./chisel server --port 8080
 ```
 
-On the server system, forward the port with this command using the same TCP port you specified in the previous command and using the ListenPort you specified when configuring Wiretap (the default is 51820). The format is `<localport>:0.0.0.0:<remoteport>/udp`.
+> [!Note]
+> In this example we run the `chisel server ...` command on the Wiretap *client*, and `chisel client ...` command  on a Wiretap *server*. This is because the chisel "client" always tries to reach out and connect to the chisel "server," whereas Wiretap clients and servers are defined by their functionality since either can initiate the connection. 
 
-In this example, we're forwarding 51821/udp on the server to 51820 on the client:
+In this example, we're connecting chisel to the listener on 8080 (on the wiretap client) and forwarding 61820/udp from the Wiretap server to 51820 (any interface) on the Wiretap client:
 ```bash
-./chisel client <endpoint address>:8080 51821:0.0.0.0:51820/udp
+./chisel client <wiretap client address>:8080 61820:0.0.0.0:51820/udp
 ```
+- `8080` is the chisel listening port specified in the `chisel server` command above
+- `61820` is the localhost port on the Wiretap server that will be forwarded back to the Wiretap client.
+- `51820` is the port where the Wiretap client is listening (by default is the same port you specified in the `--endpoint` argument in the initial `wiretap configure` command)
 
-Finally, run Wiretap with the forwarded local port as your endpoint on the server system:
+Finally, run Wiretap on the remote server system with the forwarded localhost port in the `--endpoint`:
 ```bash
-WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRETAP_E2EE_INTERFACE_PRIVATEKEY=<key> WIRETAP_E2EE_PEER_PUBLICKEY=<key> WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve --endpoint localhost:51821
+WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRETAP_E2EE_INTERFACE_PRIVATEKEY=<key> WIRETAP_E2EE_PEER_PUBLICKEY=<key> WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve --endpoint localhost:61820
 ```
 
 ### Add Clients To Any Server
@@ -643,7 +647,7 @@ WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRE
 
 Clients can be attached to any server in the network by using the `--server-address <api-address>` argument when running `wiretap add client`. This allows a client on a different network than the first client to still gain access to all of the Wiretap network's routes. But this has some limitations.
 
-In this example, a new client (C2) is added to the second server in the right branch of a Wiretap network. This client will only be able to access routes via the right branch of the network (S3 and S4) and not the left branch (S1 or S2) because the branches are only joined through an existing client (C1), which does not route traffic from other clients:
+In this example, a new client (C2) is added to the second server in the right branch of a Wiretap network (S4). This client will only be able to access routes via the right branch of the network (S3 and S4) and not the left branch (S1 or S2) because the branches are only joined through an existing client (C1), which does not route traffic from other clients:
 
 ```
          ┌──────┐
