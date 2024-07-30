@@ -86,16 +86,16 @@ func init() {
 	configureCmd.Flags().BoolVarP(&configureCmdArgs.simple, "simple", "", configureCmdArgs.simple, "disable multihop and multiclient features for a simpler setup")
 
 	configureCmd.Flags().StringVarP(&configureCmdArgs.apiAddr, "api", "0", configureCmdArgs.apiAddr, "address of server API service")
+	configureCmd.Flags().IntVarP(&configureCmdArgs.keepalive, "keepalive", "k", configureCmdArgs.keepalive, "tunnel keepalive in seconds, only applies to outbound handshakes")
+	configureCmd.Flags().IntVarP(&configureCmdArgs.mtu, "mtu", "m", configureCmdArgs.mtu, "tunnel MTU")
+	configureCmd.Flags().BoolVarP(&configureCmdArgs.disableV6, "disable-ipv6", "", configureCmdArgs.disableV6, "disables IPv6")
+	
 	configureCmd.Flags().StringVarP(&configureCmdArgs.clientAddr4Relay, "ipv4-relay", "", configureCmdArgs.clientAddr4Relay, "ipv4 relay address")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.clientAddr6Relay, "ipv6-relay", "", configureCmdArgs.clientAddr6Relay, "ipv6 relay address")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.clientAddr4E2EE, "ipv4-e2ee", "", configureCmdArgs.clientAddr4E2EE, "ipv4 e2ee address")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.clientAddr6E2EE, "ipv6-e2ee", "", configureCmdArgs.clientAddr6E2EE, "ipv6 e2ee address")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.serverAddr4Relay, "ipv4-relay-server", "", configureCmdArgs.serverAddr4Relay, "ipv4 relay address of server")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.serverAddr6Relay, "ipv6-relay-server", "", configureCmdArgs.serverAddr6Relay, "ipv6 relay address of server")
-
-	configureCmd.Flags().IntVarP(&configureCmdArgs.keepalive, "keepalive", "k", configureCmdArgs.keepalive, "tunnel keepalive in seconds, only applies to outbound handshakes")
-	configureCmd.Flags().IntVarP(&configureCmdArgs.mtu, "mtu", "m", configureCmdArgs.mtu, "tunnel MTU")
-	configureCmd.Flags().BoolVarP(&configureCmdArgs.disableV6, "disable-ipv6", "", configureCmdArgs.disableV6, "disables IPv6")
 
 	err := configureCmd.MarkFlagRequired("routes")
 	check("failed to mark flag required", err)
@@ -107,7 +107,21 @@ func init() {
 	helpFunc := configureCmd.HelpFunc()
 	configureCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
-			for _, f := range []string{"api", "ipv4-relay", "ipv6-relay", "ipv4-e2ee", "ipv6-e2ee", "ipv4-relay-server", "ipv6-relay-server", "keepalive", "mtu", "disable-ipv6"} {
+			for _, f := range []string{
+				"api", 
+				"ipv4-relay", 
+				"ipv6-relay", 
+				"ipv4-e2ee", 
+				"ipv6-e2ee", 
+				"ipv4-relay-server", 
+				"ipv6-relay-server", 
+				"keepalive", 
+				"mtu", 
+				"disable-ipv6",
+				"relay-output",
+				"e2ee-output",
+				"server-output",
+			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
 					fmt.Printf("Failed to hide flag %v: %v\n", f, err)

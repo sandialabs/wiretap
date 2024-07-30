@@ -48,15 +48,33 @@ var addClientCmd = &cobra.Command{
 func init() {
 	addCmd.AddCommand(addClientCmd)
 
+	addClientCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address of server that new client will connect to. By default new clients connect to existing relay servers")
+	addClientCmd.Flags().IntVarP(&addClientCmdArgs.mtu, "mtu", "m", addClientCmdArgs.mtu, "tunnel MTU")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.outputConfigFileRelay, "relay-output", "", addClientCmdArgs.outputConfigFileRelay, "filename of output relay config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.outputConfigFileE2EE, "e2ee-output", "", addClientCmdArgs.outputConfigFileE2EE, "filename of output E2EE config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.inputConfigFileRelay, "relay-input", "", addClientCmdArgs.inputConfigFileRelay, "filename of input relay config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.inputConfigFileE2EE, "e2ee-input", "", addClientCmdArgs.inputConfigFileE2EE, "filename of input E2EE config file")
-	addClientCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address of server that new client will connect to. By default new clients connect to existing relay servers")
-	addClientCmd.Flags().IntVarP(&addClientCmdArgs.mtu, "mtu", "m", addClientCmdArgs.mtu, "tunnel MTU")
 
 	addClientCmd.Flags().SortFlags = false
 	addClientCmd.PersistentFlags().SortFlags = false
+	
+	helpFunc := addCmd.HelpFunc()
+	addCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if !ShowHidden {
+			for _, f := range []string{
+				"relay-output",
+				"e2ee-output",
+				"relay-input",
+				"e2ee-input",
+			} {
+				err := cmd.Flags().MarkHidden(f)
+				if err != nil {
+					fmt.Printf("Failed to hide flag %v: %v\n", f, err)
+				}
+			}
+		}
+		helpFunc(cmd, args)
+	})
 }
 
 func (c addClientCmdConfig) Run() {

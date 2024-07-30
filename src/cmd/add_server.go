@@ -60,6 +60,25 @@ func init() {
 
 	addServerCmd.Flags().SortFlags = false
 	addServerCmd.PersistentFlags().SortFlags = false
+	
+	helpFunc := addCmd.HelpFunc()
+	addCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if !ShowHidden {
+			for _, f := range []string{
+				"relay-output",
+				"e2ee-output",
+				"relay-input",
+				"e2ee-input",
+				"server-output",
+			} {
+				err := cmd.Flags().MarkHidden(f)
+				if err != nil {
+					fmt.Printf("Failed to hide flag %v: %v\n", f, err)
+				}
+			}
+		}
+		helpFunc(cmd, args)
+	})
 }
 
 func (c addServerCmdConfig) Run() {
