@@ -24,6 +24,7 @@ type addClientCmdConfig struct {
 	outputConfigFileE2EE  string
 	serverAddress         string
 	mtu                   int
+	port                  int
 }
 
 var addClientCmdArgs = addClientCmdConfig{
@@ -33,6 +34,7 @@ var addClientCmdArgs = addClientCmdConfig{
 	outputConfigFileE2EE:  ConfigE2EE,
 	serverAddress:         "",
 	mtu:                   MTU,
+	port:                  USE_ENDPOINT_PORT,
 }
 
 // addClientCmd represents the client command.
@@ -49,7 +51,9 @@ func init() {
 	addCmd.AddCommand(addClientCmd)
 
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address of server that new client will connect to. By default new clients connect to existing relay servers")
+	addClientCmd.Flags().IntVarP(&addClientCmdArgs.port, "port", "p", addClientCmdArgs.port, "port of wireguard listener; client port if inbound handshake and server port if outbound")
 	addClientCmd.Flags().IntVarP(&addClientCmdArgs.mtu, "mtu", "m", addClientCmdArgs.mtu, "tunnel MTU")
+	
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.outputConfigFileRelay, "relay-output", "", addClientCmdArgs.outputConfigFileRelay, "filename of output relay config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.outputConfigFileE2EE, "e2ee-output", "", addClientCmdArgs.outputConfigFileE2EE, "filename of output E2EE config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.inputConfigFileRelay, "relay-input", "", addClientCmdArgs.inputConfigFileRelay, "filename of input relay config file")
@@ -101,8 +105,8 @@ func (c addClientCmdConfig) Run() {
 		disableV6 = true
 	}
 	
-	if addArgs.port == USE_ENDPOINT_PORT {
-		addArgs.port = portFromEndpoint(addArgs.endpoint);
+	if c.port == USE_ENDPOINT_PORT {
+		c.port = portFromEndpoint(addArgs.endpoint);
 	}
 
 	// Make new configs for client.
@@ -111,7 +115,7 @@ func (c addClientCmdConfig) Run() {
 		relayAddrs = append(relayAddrs, addresses.NextClientRelayAddr6.String()+"/128")
 	}
 	clientConfigRelay, err := peer.GetConfig(peer.ConfigArgs{
-		ListenPort: addArgs.port,
+		ListenPort: c.port,
 		Addresses:  relayAddrs,
 	})
 	check("failed to generate client relay config", err)
