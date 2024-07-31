@@ -117,17 +117,21 @@ func init() {
 
 	// Flags.
 	cmd.Flags().StringVarP(&serveCmd.configFile, "config-file", "f", serveCmd.configFile, "wireguard config file to read from")
+	cmd.Flags().IntP("port", "p", wiretapDefault.port, "listener port to use for relay connections")
 	cmd.Flags().BoolVarP(&serveCmd.quiet, "quiet", "q", serveCmd.quiet, "silence wiretap log messages")
 	cmd.Flags().BoolVarP(&serveCmd.debug, "debug", "d", serveCmd.debug, "enable wireguard log messages")
 	cmd.Flags().BoolVarP(&serveCmd.simple, "simple", "", serveCmd.simple, "disable multihop and multiclient features for a simpler setup")
+	cmd.Flags().BoolVarP(&serveCmd.disableV6, "disable-ipv6", "", serveCmd.disableV6, "disable ipv6")
 	cmd.Flags().BoolVarP(&serveCmd.logging, "log", "l", serveCmd.logging, "enable logging to file")
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
+	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
+	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
+	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
 	cmd.Flags().UintVarP(&serveCmd.catchTimeout, "completion-timeout", "", serveCmd.catchTimeout, "time in ms for client to complete TCP connection to server")
 	cmd.Flags().UintVarP(&serveCmd.connTimeout, "conn-timeout", "", serveCmd.connTimeout, "time in ms for server to wait for outgoing TCP handshakes to complete")
 	cmd.Flags().UintVarP(&serveCmd.keepaliveIdle, "keepalive-idle", "", serveCmd.keepaliveIdle, "time in seconds before TCP keepalives are sent to client")
 	cmd.Flags().UintVarP(&serveCmd.keepaliveInterval, "keepalive-interval", "", serveCmd.keepaliveInterval, "time in seconds between TCP keepalives")
 	cmd.Flags().UintVarP(&serveCmd.keepaliveCount, "keepalive-count", "", serveCmd.keepaliveCount, "number of unacknowledged TCP keepalives before closing connection")
-	cmd.Flags().BoolVarP(&serveCmd.disableV6, "disable-ipv6", "", serveCmd.disableV6, "disable ipv6")
 
 	cmd.Flags().StringVarP(&serveCmd.clientAddr4Relay, "ipv4-relay-client", "", serveCmd.clientAddr4Relay, "ipv4 relay address of client")
 	cmd.Flags().StringVarP(&serveCmd.clientAddr6Relay, "ipv6-relay-client", "", serveCmd.clientAddr6Relay, "ipv6 relay address of client")
@@ -151,15 +155,11 @@ func init() {
 	cmd.Flags().StringP("public-e2ee", "", "", "wireguard public key of remote peer for E2EE interface")
 	cmd.Flags().StringP("endpoint-relay", "", wiretapDefault.endpointRelay, "socket address of remote peer that server will connect to (example \"1.2.3.4:51820\")")
 	cmd.Flags().StringP("endpoint-e2ee", "", wiretapDefault.endpointE2EE, "socket address of remote peer's e2ee interface that server will connect to (example \"1.2.3.4:51820\")")
-	cmd.Flags().IntP("port", "p", wiretapDefault.port, "wireguard listener port")
 	cmd.Flags().StringP("allowed", "a", wiretapDefault.allowedIPs, "comma-separated list of CIDR IP ranges to associate with peer")
 	cmd.Flags().StringP("ipv4-relay", "", wiretapDefault.serverAddr4Relay, "ipv4 relay address")
 	cmd.Flags().StringP("ipv6-relay", "", wiretapDefault.serverAddr6Relay, "ipv6 relay address")
 	cmd.Flags().StringP("ipv4-e2ee", "", wiretapDefault.serverAddr4E2EE, "ipv4 e2ee address")
 	cmd.Flags().StringP("ipv6-e2ee", "", wiretapDefault.serverAddr6E2EE, "ipv6 e2ee address")
-	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
-	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
-	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
 
 	// Bind deprecated flags to viper.
 	err = viper.BindPFlag("Relay.Interface.privatekey", cmd.Flags().Lookup("private-relay"))

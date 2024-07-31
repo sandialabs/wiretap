@@ -75,7 +75,7 @@ var rootCmd = &cobra.Command{
 
 // Execute starts command handling, called by main.
 func Execute() {
-	rootCmd.PersistentFlags().BoolVarP(&ShowHidden, "show-hidden", "", ShowHidden, "show hidden flag options")
+	rootCmd.PersistentFlags().BoolVarP(&ShowHidden, "show-hidden", "H", ShowHidden, "show hidden flag options")
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
