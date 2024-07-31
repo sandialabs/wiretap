@@ -65,15 +65,18 @@ func init() {
 	addCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
 			for _, f := range []string{
-				"relay-output",
-				"e2ee-output",
 				"relay-input",
 				"e2ee-input",
 				"server-output",
 			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
-					fmt.Printf("Failed to hide flag %v: %v\n", f, err)
+					if strings.HasSuffix(err.Error(), "does not exist") {
+						//add_client also runs this and complains about args it doesn't recognize
+					} else {
+						fmt.Printf("Failed to hide flag %v: %v\n", f, err)
+					}
+					
 				}
 			}
 		}
