@@ -33,7 +33,7 @@ var addCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(addCmd)
 
-	addCmd.PersistentFlags().StringVarP(&addCmdArgs.endpoint, "endpoint", "e", addCmdArgs.endpoint, "socket address of wireguard listener; client address if inbound handshake and server address if outbound (example \"1.2.3.4:51820\")")
+	addCmd.PersistentFlags().StringVarP(&addCmdArgs.endpoint, "endpoint", "e", addCmdArgs.endpoint, "[REQUIRED] socket address of wireguard listener; client address if inbound handshake and server address if outbound (example \"1.2.3.4:51820\")")
 	addCmd.PersistentFlags().BoolVar(&addCmdArgs.outbound, "outbound", addCmdArgs.outbound, "use endpoint to initiate handshake out to server instead of the other way around")
 	addCmd.PersistentFlags().IntVarP(&addCmdArgs.port, "port", "p", addCmdArgs.port, "port of wireguard listener; client port if inbound handshake and server port if outbound")
 
@@ -48,7 +48,9 @@ func init() {
 	helpFunc := addCmd.HelpFunc()
 	addCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
-			for _, f := range []string{"keepalive"} {
+			for _, f := range []string{
+				"keepalive",
+			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
 					fmt.Printf("Failed to hide flag %v: %v\n", f, err)

@@ -69,7 +69,11 @@ func init() {
 			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
-					fmt.Printf("Failed to hide flag %v: %v\n", f, err)
+					if strings.HasSuffix(err.Error(), "does not exist") {
+						//add_server also runs this and complains about args it doesn't recognize
+					} else {
+						fmt.Printf("Failed to hide flag %v: %v\n", f, err)
+					}
 				}
 			}
 		}

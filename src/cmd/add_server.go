@@ -48,7 +48,7 @@ var addServerCmd = &cobra.Command{
 func init() {
 	addCmd.AddCommand(addServerCmd)
 
-	addServerCmd.Flags().StringSliceVarP(&addServerCmdArgs.allowedIPs, "routes", "r", addServerCmdArgs.allowedIPs, "CIDR IP ranges that will be routed through wiretap")
+	addServerCmd.Flags().StringSliceVarP(&addServerCmdArgs.allowedIPs, "routes", "r", addServerCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.serverAddress, "server-address", "s", addServerCmdArgs.serverAddress, "API address of server that new server will connect to, connects to client by default")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileRelay, "relay-input", "", addServerCmdArgs.configFileRelay, "filename of input relay config file")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileE2EE, "e2ee-input", "", addServerCmdArgs.configFileE2EE, "filename of input E2EE config file")
@@ -65,15 +65,18 @@ func init() {
 	addCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
 			for _, f := range []string{
-				"relay-output",
-				"e2ee-output",
 				"relay-input",
 				"e2ee-input",
 				"server-output",
 			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
-					fmt.Printf("Failed to hide flag %v: %v\n", f, err)
+					if strings.HasSuffix(err.Error(), "does not exist") {
+						//add_client also runs this and complains about args it doesn't recognize
+					} else {
+						fmt.Printf("Failed to hide flag %v: %v\n", f, err)
+					}
+					
 				}
 			}
 		}

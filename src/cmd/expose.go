@@ -53,7 +53,7 @@ func init() {
 	cmd.Flags().StringVarP(&exposeCmd.protocol, "protocol", "p", exposeCmd.protocol, "Port protocol, tcp/udp")
 	cmd.Flags().BoolVarP(&exposeCmd.dynamic, "dynamic", "d", exposeCmd.dynamic, "Dynamic port forwarding, SOCKS proxy service opens on remote port")
 	cmd.PersistentFlags().StringVarP(&exposeCmd.serverAddr, "server-address", "s", exposeCmd.serverAddr, "API address of server that ports should be forwarded from, exposes service to all servers by default")
-	cmd.PersistentFlags().StringVarP(&exposeCmd.configFile, "config", "c", exposeCmd.configFile, "Config file needed when talking to all serves (the default)")
+	cmd.PersistentFlags().StringVarP(&exposeCmd.configFile, "config", "c", exposeCmd.configFile, "Config file needed when talking to all servers (the default)")
 
 	cmd.MarkFlagsMutuallyExclusive("dynamic", "local")
 
