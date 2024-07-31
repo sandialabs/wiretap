@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"log"
 	"net/netip"
+	"net"
 	"os"
+	"strconv"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+const USE_ENDPOINT_PORT = -1
 
 // Defaults shared by multiple commands.
 var (
@@ -83,4 +87,14 @@ func check(message string, err error) {
 	if err != nil {
 		log.Fatalf("%s: %v", message, err)
 	}
+}
+
+// Extract the port from the endpoint string 
+func portFromEndpoint(endpoint string) int {
+	_, strPort, err := net.SplitHostPort(endpoint)
+	check("cannot extract port from endpoint argument", err);
+	
+	p, err := strconv.Atoi(strPort);
+	check("cannot extract port from endpoint argument", err);
+	return p;
 }

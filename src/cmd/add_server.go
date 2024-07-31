@@ -305,6 +305,11 @@ func (c addServerCmdConfig) Run() {
 		// Leaf server is the relay peer for the new server.
 		clientConfigRelay = leafServerConfigRelay
 	}
+	
+	// Use a reasonable default for server listening ports
+	if addArgs.port == USE_ENDPOINT_PORT {
+		addArgs.port = Port;
+	}
 
 	if addArgs.port != Port {
 		err = serverConfigRelay.SetPort(addArgs.port)

@@ -39,10 +39,10 @@ type configureCmdConfig struct {
 // Defaults for configure command.
 // See root command for shared defaults.
 var configureCmdArgs = configureCmdConfig{
-	allowedIPs:       []string{"0.0.0.0/32"},
+	allowedIPs:       []string{""},
 	endpoint:         Endpoint,
 	outbound:         false,
-	port:             Port,
+	port:             USE_ENDPOINT_PORT,
 	configFileRelay:  ConfigRelay,
 	configFileE2EE:   ConfigE2EE,
 	configFileServer: ConfigServer,
@@ -75,10 +75,10 @@ var configureCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(configureCmd)
 
-	configureCmd.Flags().StringSliceVarP(&configureCmdArgs.allowedIPs, "routes", "r", configureCmdArgs.allowedIPs, "CIDR IP ranges that will be routed through wiretap")
-	configureCmd.Flags().StringVarP(&configureCmdArgs.endpoint, "endpoint", "e", configureCmdArgs.endpoint, "socket address of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
-	configureCmd.Flags().BoolVar(&configureCmdArgs.outbound, "outbound", configureCmdArgs.outbound, "client will initiate handshake to server, set endpoint to server address")
-	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "port of local wireguard relay listener")
+	configureCmd.Flags().StringSliceVarP(&configureCmdArgs.allowedIPs, "routes", "r", configureCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap (example \"10.0.0.1/24\")")
+	configureCmd.Flags().StringVarP(&configureCmdArgs.endpoint, "endpoint", "e", configureCmdArgs.endpoint, "[REQUIRED] IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
+	configureCmd.Flags().BoolVar(&configureCmdArgs.outbound, "outbound", configureCmdArgs.outbound, "client will initiate handshake to server; --endpoint now specifies server's listening socket instead of client's")
+	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for local wireguard relay; default is to use the same port specified by --endpoint")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileRelay, "relay-output", "", configureCmdArgs.configFileRelay, "wireguard relay config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileE2EE, "e2ee-output", "", configureCmdArgs.configFileE2EE, "wireguard E2EE config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileServer, "server-output", "s", configureCmdArgs.configFileServer, "wiretap server config output filename")
@@ -158,6 +158,10 @@ func (c configureCmdConfig) Run() {
 	clientE2EEAddrs := []string{c.clientAddr4E2EE}
 	if !c.disableV6 {
 		clientE2EEAddrs = append(clientE2EEAddrs, c.clientAddr6E2EE)
+	}
+	
+	if c.port == USE_ENDPOINT_PORT {
+		c.port = portFromEndpoint(c.endpoint);
 	}
 
 	clientConfigRelayArgs := peer.ConfigArgs{
