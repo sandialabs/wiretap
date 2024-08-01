@@ -52,7 +52,7 @@ func init() {
 
 	addServerCmd.Flags().StringSliceVarP(&addServerCmdArgs.allowedIPs, "routes", "r", addServerCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.serverAddress, "server-address", "s", addServerCmdArgs.serverAddress, "API address of server that new server will connect to, connects to client by default")
-	addServerCmd.Flags().IntVarP(&addServerCmdArgs.port, "port", "p", addServerCmdArgs.port, "listener port for new server's wireguard relay. If --outbound, default is the port specified in --endpoint; otherwise default is 51820")
+	addServerCmd.Flags().IntVarP(&addServerCmdArgs.port, "port", "p", addServerCmdArgs.port, "listener port to start on new server for wireguard relay. If --outbound, default is the port specified in --endpoint; otherwise default is 51820")
 	addServerCmd.Flags().BoolVarP(&addServerCmdArgs.writeToClipboard, "clipboard", "c", addServerCmdArgs.writeToClipboard, "copy configuration args to clipboard")
 	
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileRelay, "relay-input", "", addServerCmdArgs.configFileRelay, "filename of input relay config file")
