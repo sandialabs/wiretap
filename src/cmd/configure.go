@@ -177,6 +177,10 @@ func (c configureCmdConfig) Run() {
 	if c.port == USE_ENDPOINT_PORT {
 		c.port = portFromEndpoint(c.endpoint);
 	}
+	
+	err = serverConfigRelay.SetPort(Port)
+	check("failed to set port", err)
+	
 
 	clientConfigRelayArgs := peer.ConfigArgs{
 		ListenPort: c.port,

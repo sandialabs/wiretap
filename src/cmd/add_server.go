@@ -342,7 +342,6 @@ func (c addServerCmdConfig) Run() {
 		}
 	}
 	
-	// Make the port explicit to avoid implicit confusion
 	err = serverConfigRelay.SetPort(c.port)
 	check("failed to set port", err)
 
