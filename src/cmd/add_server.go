@@ -24,6 +24,7 @@ type addServerCmdConfig struct {
 	configFileE2EE   string
 	configFileServer string
 	writeToClipboard bool
+	port             int
 }
 
 var addServerCmdArgs = addServerCmdConfig{
@@ -33,6 +34,7 @@ var addServerCmdArgs = addServerCmdConfig{
 	configFileE2EE:   ConfigE2EE,
 	configFileServer: ConfigServer,
 	writeToClipboard: false,
+	port:             USE_ENDPOINT_PORT,
 }
 
 // addServerCmd represents the server command.
@@ -50,10 +52,12 @@ func init() {
 
 	addServerCmd.Flags().StringSliceVarP(&addServerCmdArgs.allowedIPs, "routes", "r", addServerCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.serverAddress, "server-address", "s", addServerCmdArgs.serverAddress, "API address of server that new server will connect to, connects to client by default")
+	addServerCmd.Flags().IntVarP(&addServerCmdArgs.port, "port", "p", addServerCmdArgs.port, "listener port to start on new server for wireguard relay. If --outbound, default is the port specified in --endpoint; otherwise default is 51820")
+	addServerCmd.Flags().BoolVarP(&addServerCmdArgs.writeToClipboard, "clipboard", "c", addServerCmdArgs.writeToClipboard, "copy configuration args to clipboard")
+	
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileRelay, "relay-input", "", addServerCmdArgs.configFileRelay, "filename of input relay config file")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileE2EE, "e2ee-input", "", addServerCmdArgs.configFileE2EE, "filename of input E2EE config file")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileServer, "server-output", "", addServerCmdArgs.configFileServer, "filename of server config output file")
-	addServerCmd.Flags().BoolVarP(&addServerCmdArgs.writeToClipboard, "clipboard", "c", addServerCmdArgs.writeToClipboard, "copy configuration args to clipboard")
 
 	err := addServerCmd.MarkFlagRequired("routes")
 	check("failed to mark flag required", err)
@@ -328,15 +332,18 @@ func (c addServerCmdConfig) Run() {
 		clientConfigRelay = leafServerConfigRelay
 	}
 	
-	// Use a reasonable default for server listening ports
-	if addArgs.port == USE_ENDPOINT_PORT {
-		addArgs.port = Port;
+	// Set port defaults
+	if c.port == USE_ENDPOINT_PORT {
+		if addArgs.outbound { //for outbound, default port is same as endpoint port
+			c.port = portFromEndpoint(addArgs.endpoint)
+			
+		} else { //for inbound, use a reasonable default for server relay listening port
+			c.port = Port;
+		}
 	}
-
-	if addArgs.port != Port {
-		err = serverConfigRelay.SetPort(addArgs.port)
-		check("failed to set port", err)
-	}
+	
+	err = serverConfigRelay.SetPort(c.port)
+	check("failed to set port", err)
 
 	// Overwrite Relay file with new server peer if adding a server directly to the client.
 	var fileStatusRelay string

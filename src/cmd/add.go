@@ -9,7 +9,6 @@ import (
 type addCmdConfig struct {
 	endpoint  string
 	outbound  bool
-	port      int
 	keepalive int
 }
 
@@ -18,7 +17,6 @@ type addCmdConfig struct {
 var addCmdArgs = addCmdConfig{
 	endpoint:  Endpoint,
 	outbound:  false,
-	port:      USE_ENDPOINT_PORT,
 	keepalive: Keepalive,
 }
 
@@ -35,7 +33,6 @@ func init() {
 
 	addCmd.PersistentFlags().StringVarP(&addCmdArgs.endpoint, "endpoint", "e", addCmdArgs.endpoint, "[REQUIRED] socket address of wireguard listener; client address if inbound handshake and server address if outbound (example \"1.2.3.4:51820\")")
 	addCmd.PersistentFlags().BoolVar(&addCmdArgs.outbound, "outbound", addCmdArgs.outbound, "use endpoint to initiate handshake out to server instead of the other way around")
-	addCmd.PersistentFlags().IntVarP(&addCmdArgs.port, "port", "p", addCmdArgs.port, "port of wireguard listener; client port if inbound handshake and server port if outbound")
 
 	addCmd.PersistentFlags().IntVarP(&addCmdArgs.keepalive, "keepalive", "k", addCmdArgs.keepalive, "tunnel keepalive in seconds")
 
