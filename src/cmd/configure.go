@@ -79,10 +79,10 @@ func init() {
 
 	configureCmd.Flags().StringSliceVarP(&configureCmdArgs.allowedIPs, "routes", "r", configureCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap (example \"10.0.0.1/24\")")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.endpoint, "endpoint", "e", configureCmdArgs.endpoint, "[REQUIRED] IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
-	configureCmd.Flags().BoolVar(&configureCmdArgs.outbound, "outbound", configureCmdArgs.outbound, "client will initiate handshake to server; --endpoint now specifies server's listening socket instead of client's")
-	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for local wireguard relay; default is to use the same port specified by --endpoint")
-	configureCmd.Flags().StringVarP(&configureCmdArgs.nickname, "nickname", "n", configureCmdArgs.nickname, "Server nickname to display in 'status' command")
-	
+	configureCmd.Flags().BoolVar(&configureCmdArgs.outbound, "outbound", configureCmdArgs.outbound, "client will initiate handshake to server; --endpoint now specifies server's listening socket instead of client's, and --port assigns the server's listening port instead of client's")
+	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for wireguard relay. Default is to copy the --endpoint port. If --outbound, sets port for the server; else for the client.")
+  configureCmd.Flags().StringVarP(&configureCmdArgs.nickname, "nickname", "n", configureCmdArgs.nickname, "Server nickname to display in 'status' command")
+  
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileRelay, "relay-output", "", configureCmdArgs.configFileRelay, "wireguard relay config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileE2EE, "e2ee-output", "", configureCmdArgs.configFileE2EE, "wireguard E2EE config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileServer, "server-output", "s", configureCmdArgs.configFileServer, "wiretap server config output filename")
@@ -179,10 +179,23 @@ func (c configureCmdConfig) Run() {
 	}
 	
 	if c.port == USE_ENDPOINT_PORT {
-		c.port = portFromEndpoint(c.endpoint);
+		c.port = portFromEndpoint(c.endpoint)
 	}
 	
-	err = serverConfigRelay.SetPort(Port)
+	// We only configure one of these (based on --outbound or not)
+	// The other must be manually changed in the configs/command/envs
+	var clientPort int;
+	var serverPort int;
+	
+	if c.outbound {
+		clientPort = Port
+		serverPort = c.port
+	} else {
+		clientPort = c.port
+		serverPort = Port
+	}
+	
+	err = serverConfigRelay.SetPort(serverPort)
 	check("failed to set port", err)
 	
 	err = serverConfigRelay.SetNickname(c.nickname)
@@ -190,7 +203,7 @@ func (c configureCmdConfig) Run() {
 	
 
 	clientConfigRelayArgs := peer.ConfigArgs{
-		ListenPort: c.port,
+		ListenPort: clientPort,
 		Peers: []peer.PeerConfigArgs{
 			{
 				PublicKey: serverConfigRelay.GetPublicKey(),
