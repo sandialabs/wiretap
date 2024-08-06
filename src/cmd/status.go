@@ -50,6 +50,7 @@ func init() {
 func (c statusCmdConfig) Run() {
 	// Start building tree.
 	type Node struct {
+		nickname    string
 		peerConfig  peer.PeerConfig
 		relayConfig peer.Config
 		e2eeConfig  peer.Config
@@ -83,6 +84,7 @@ func (c statusCmdConfig) Run() {
 			log.Printf("%s: %v", message, err)
 		} else {
 			nodes[relayConfig.GetPublicKey()] = Node{
+				nickname: "12345678901234567890",
 				peerConfig:  ep,
 				relayConfig: relayConfig,
 				e2eeConfig:  e2eeConfig,
@@ -134,11 +136,12 @@ func (c statusCmdConfig) Run() {
 				}
 			}
 			t.AddChild(tree.NodeString(fmt.Sprintf(`server
-  relay: %v... 
-   e2ee: %v... 
+ nickname: %v 
+    relay: %v... 
+     e2ee: %v... 
    
-    api: %v 
- routes: %v `, c.relayConfig.GetPublicKey()[:8], c.e2eeConfig.GetPublicKey()[:8], api, strings.Join(ips, ","))))
+      api: %v 
+   routes: %v `, c.nickname, c.relayConfig.GetPublicKey()[:8], c.e2eeConfig.GetPublicKey()[:8], api, strings.Join(ips, ","))))
 			child, err := t.Child(0)
 			check("could not build tree", err)
 			treeTraversal(node.children[i], child)
