@@ -18,6 +18,7 @@ type Config struct {
 	mtu       int
 	peers     []PeerConfig
 	addresses []net.IPNet
+	nickname  string
 }
 
 type configJSON struct {
@@ -25,6 +26,7 @@ type configJSON struct {
 	MTU       int
 	Peers     []PeerConfig
 	Addresses []net.IPNet
+	Nickname  string
 }
 
 type ConfigArgs struct {
@@ -35,6 +37,7 @@ type ConfigArgs struct {
 	ReplacePeers bool
 	Peers        []PeerConfigArgs
 	Addresses    []string
+	Nickname     string
 }
 
 type Shell uint
@@ -73,6 +76,13 @@ func GetConfig(args ConfigArgs) (Config, error) {
 
 	if args.MTU != 0 {
 		err = c.SetMTU(args.MTU)
+		if err != nil {
+			return Config{}, err
+		}
+	}
+	
+	if args.Nickname != "" {
+		err = c.SetNickname(args.Nickname)
 		if err != nil {
 			return Config{}, err
 		}
@@ -150,6 +160,8 @@ func ParseConfig(filename string) (c Config, err error) {
 						return c, e
 					}
 					err = c.SetMTU(mtu)
+				case "nickname":
+					err = c.SetNickname(value)
 				}
 				if err != nil {
 					return c, err
@@ -209,6 +221,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		c.mtu,
 		c.peers,
 		c.addresses,
+		c.nickname,
 	})
 }
 
@@ -223,6 +236,7 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 	c.config = tmp.Config
 	c.peers = tmp.Peers
 	c.addresses = tmp.Addresses
+	c.nickname = tmp.Nickname
 
 	return nil
 }
@@ -252,6 +266,22 @@ func (c *Config) SetPort(port int) error {
 
 func (c *Config) ClearPort() {
 	c.config.ListenPort = nil
+}
+
+func (c *Config) GetNickname() string {
+	return c.nickname
+}
+
+func (c *Config) SetNickname(nickname string) error {
+
+	if nickname != "" {
+		c.nickname = nickname
+	}
+	return nil
+}
+
+func (c *Config) ClearNickname() {
+	c.nickname = ""
 }
 
 func (c *Config) SetFirewallMark(mark int) error {
@@ -441,6 +471,11 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 		keys = append(keys, "WIRETAP_RELAY_INTERFACE_PORT")
 		vals = append(vals, fmt.Sprint(*relayConfig.config.ListenPort))
 	}
+	
+	if relayConfig.nickname != "" {
+		keys = append(keys, "WIRETAP_RELAY_INTERFACE_NICKNAME")
+		vals = append(vals, fmt.Sprint(relayConfig.nickname))
+	}
 
 	if relayConfig.mtu != 0 {
 		keys = append(keys, "WIRETAP_RELAY_INTERFACE_MTU")
@@ -527,6 +562,10 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config) string {
 
 	if relayConfig.config.ListenPort != nil {
 		s.WriteString(fmt.Sprintf("Port = %d\n", *relayConfig.config.ListenPort))
+	}
+	
+	if relayConfig.nickname != "" {
+		s.WriteString(fmt.Sprintf("Nickname = %s\n", relayConfig.nickname))
 	}
 
 	if relayConfig.mtu != 0 {

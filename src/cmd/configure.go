@@ -18,6 +18,7 @@ type configureCmdConfig struct {
 	endpoint         string
 	outbound         bool
 	port             int
+	nickname         string
 	configFileRelay  string
 	configFileE2EE   string
 	configFileServer string
@@ -43,6 +44,7 @@ var configureCmdArgs = configureCmdConfig{
 	endpoint:         Endpoint,
 	outbound:         false,
 	port:             USE_ENDPOINT_PORT,
+	nickname:         "",
 	configFileRelay:  ConfigRelay,
 	configFileE2EE:   ConfigE2EE,
 	configFileServer: ConfigServer,
@@ -79,6 +81,8 @@ func init() {
 	configureCmd.Flags().StringVarP(&configureCmdArgs.endpoint, "endpoint", "e", configureCmdArgs.endpoint, "[REQUIRED] IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
 	configureCmd.Flags().BoolVar(&configureCmdArgs.outbound, "outbound", configureCmdArgs.outbound, "client will initiate handshake to server; --endpoint now specifies server's listening socket instead of client's")
 	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for local wireguard relay; default is to use the same port specified by --endpoint")
+	configureCmd.Flags().StringVarP(&configureCmdArgs.nickname, "nickname", "n", configureCmdArgs.nickname, "Server nickname to display in 'status' command")
+	
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileRelay, "relay-output", "", configureCmdArgs.configFileRelay, "wireguard relay config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileE2EE, "e2ee-output", "", configureCmdArgs.configFileE2EE, "wireguard E2EE config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileServer, "server-output", "s", configureCmdArgs.configFileServer, "wiretap server config output filename")
@@ -180,6 +184,9 @@ func (c configureCmdConfig) Run() {
 	
 	err = serverConfigRelay.SetPort(Port)
 	check("failed to set port", err)
+	
+	err = serverConfigRelay.SetNickname(c.nickname)
+	check("failed to set nickname", err)
 	
 
 	clientConfigRelayArgs := peer.ConfigArgs{
