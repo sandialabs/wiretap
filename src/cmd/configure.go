@@ -197,10 +197,6 @@ func (c configureCmdConfig) Run() {
 	
 	err = serverConfigRelay.SetPort(serverPort)
 	check("failed to set port", err)
-	
-	err = serverConfigRelay.SetNickname(c.nickname)
-	check("failed to set nickname", err)
-	
 
 	clientConfigRelayArgs := peer.ConfigArgs{
 		ListenPort: clientPort,
@@ -246,6 +242,7 @@ func (c configureCmdConfig) Run() {
 				PublicKey:  serverConfigE2EE.GetPublicKey(),
 				AllowedIPs: c.allowedIPs,
 				Endpoint:   net.JoinHostPort(relaySubnet4.Addr().Next().Next().String(), fmt.Sprint(E2EEPort)),
+				Nickname:  c.nickname,
 			},
 		},
 		Addresses: clientE2EEAddrs,

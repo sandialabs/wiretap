@@ -15,11 +15,13 @@ import (
 type PeerConfig struct {
 	config     wgtypes.PeerConfig
 	privateKey *wgtypes.Key
+	nickname   string
 }
 
 type peerConfigJSON struct {
 	Config     wgtypes.PeerConfig
 	PrivateKey *wgtypes.Key
+	Nickname   string
 }
 
 type PeerConfigArgs struct {
@@ -32,6 +34,7 @@ type PeerConfigArgs struct {
 	ReplaceAllowedIPs           bool
 	AllowedIPs                  []string
 	PrivateKey                  string
+	Nickname                    string
 }
 
 func GetPeerConfig(args PeerConfigArgs) (PeerConfig, error) {
@@ -84,6 +87,10 @@ func GetPeerConfig(args PeerConfigArgs) (PeerConfig, error) {
 			return PeerConfig{}, err
 		}
 	}
+	
+	if args.Nickname != "" {
+		c.SetNickname(args.Nickname)
+	}
 
 	return c, nil
 }
@@ -99,6 +106,7 @@ func NewPeerConfig() (PeerConfig, error) {
 			PublicKey: privateKey.PublicKey(),
 		},
 		privateKey: &privateKey,
+		nickname: "",
 	}, nil
 }
 
@@ -106,6 +114,7 @@ func (p *PeerConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(peerConfigJSON{
 		p.config,
 		p.privateKey,
+		p.nickname,
 	})
 }
 
@@ -119,6 +128,7 @@ func (p *PeerConfig) UnmarshalJSON(b []byte) error {
 
 	p.config = tmp.Config
 	p.privateKey = tmp.PrivateKey
+	p.nickname = tmp.Nickname
 
 	return nil
 }
@@ -231,6 +241,17 @@ func (p *PeerConfig) SetPrivateKey(privateKey string) error {
 	return nil
 }
 
+func (p *PeerConfig) GetNickname() string {
+	return p.nickname
+}
+
+func (p *PeerConfig) SetNickname(nickname string) error {
+	if nickname != "" {
+		p.nickname = nickname
+	}
+	return nil
+}
+
 func (p *PeerConfig) AsFile() string {
 	var s strings.Builder
 
@@ -248,6 +269,11 @@ func (p *PeerConfig) AsFile() string {
 	}
 	if p.config.PersistentKeepaliveInterval != nil {
 		s.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", *p.config.PersistentKeepaliveInterval/time.Second))
+	}
+	
+	//Custom fields
+	if p.nickname != "" {
+		s.WriteString(fmt.Sprintf("#@Nickname = %s\n", p.nickname))
 	}
 
 	return s.String()

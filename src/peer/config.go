@@ -170,9 +170,16 @@ func ParseConfig(filename string) (c Config, err error) {
 		case "[peer]":
 			newPeer := PeerConfig{}
 			for _, line := range lines[1:] {
-				if len(line) == 0 || line[0] == '#' {
+				if len(line) == 0 {
 					continue
 				}
+				
+				if line[:2] == "#@" { //special wiretap-specific values
+					line = line[2:]
+				} else if line[0] == '#' {
+					continue
+				}
+				
 				key, value, err := parseConfigLine(line)
 				if err != nil {
 					return c, err
@@ -190,6 +197,8 @@ func ParseConfig(filename string) (c Config, err error) {
 						return c, e
 					}
 					err = newPeer.SetPersistentKeepaliveInterval(keepalive)
+				case "nickname":
+					err = newPeer.SetNickname(value)
 				}
 				if err != nil {
 					return c, err
@@ -207,12 +216,12 @@ func ParseConfig(filename string) (c Config, err error) {
 }
 
 func parseConfigLine(line string) (string, string, error) {
-	split := strings.Fields(line)
-	if len(split) != 3 {
-		return "", "", fmt.Errorf("failed to parse line: incorrect number of fields: [%s]", line)
+	key, val, found := strings.Cut(line, "=")
+	if !found {
+		return "", "", fmt.Errorf("failed to parse line: no = found: [%s]", line)
 	}
 
-	return strings.ToLower(strings.TrimSpace(split[0])), strings.TrimSpace(split[2]), nil
+	return strings.ToLower(strings.TrimSpace(key)), strings.TrimSpace(val), nil
 }
 
 func (c *Config) MarshalJSON() ([]byte, error) {
@@ -433,6 +442,12 @@ func (c *Config) AsShareableFile() string {
 	s.WriteString("[Peer]\n")
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", c.config.PrivateKey.PublicKey().String()))
 	s.WriteString("AllowedIPs = 0.0.0.0/32\n")
+	/*
+	if c.nickname != "" {
+		s.WriteString(fmt.Sprintf("#@Nickname = %s\n", c.nickname))
+	}
+	*/
+	
 
 	return s.String()
 }

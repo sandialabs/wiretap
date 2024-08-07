@@ -170,6 +170,7 @@ func (c addServerCmdConfig) Run() {
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
 			Endpoint:   net.JoinHostPort(newRelayPrefixes[0].Addr().Next().Next().String(), fmt.Sprint(E2EEPort)),
+			Nickname:   c.nickname,
 		})
 		check("failed to generate new e2ee peer", err)
 		clientConfigE2EE.AddPeer(serverE2EEPeer)
@@ -347,9 +348,6 @@ func (c addServerCmdConfig) Run() {
 	
 	err = serverConfigRelay.SetPort(c.port)
 	check("failed to set port", err)
-	
-	err = serverConfigRelay.SetNickname(c.nickname)
-	check("failed to set nickname", err)
 
 	// Overwrite Relay file with new server peer if adding a server directly to the client.
 	var fileStatusRelay string
