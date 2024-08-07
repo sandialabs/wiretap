@@ -18,6 +18,7 @@ type configureCmdConfig struct {
 	endpoint         string
 	outbound         bool
 	port             int
+	nickname         string
 	configFileRelay  string
 	configFileE2EE   string
 	configFileServer string
@@ -43,6 +44,7 @@ var configureCmdArgs = configureCmdConfig{
 	endpoint:         Endpoint,
 	outbound:         false,
 	port:             USE_ENDPOINT_PORT,
+	nickname:         "",
 	configFileRelay:  ConfigRelay,
 	configFileE2EE:   ConfigE2EE,
 	configFileServer: ConfigServer,
@@ -79,6 +81,8 @@ func init() {
 	configureCmd.Flags().StringVarP(&configureCmdArgs.endpoint, "endpoint", "e", configureCmdArgs.endpoint, "[REQUIRED] IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
 	configureCmd.Flags().BoolVar(&configureCmdArgs.outbound, "outbound", configureCmdArgs.outbound, "client will initiate handshake to server; --endpoint now specifies server's listening socket instead of client's, and --port assigns the server's listening port instead of client's")
 	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for wireguard relay. Default is to copy the --endpoint port. If --outbound, sets port for the server; else for the client.")
+	configureCmd.Flags().StringVarP(&configureCmdArgs.nickname, "nickname", "n", configureCmdArgs.nickname, "Server nickname to display in 'status' command")
+  
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileRelay, "relay-output", "", configureCmdArgs.configFileRelay, "wireguard relay config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileE2EE, "e2ee-output", "", configureCmdArgs.configFileE2EE, "wireguard E2EE config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileServer, "server-output", "s", configureCmdArgs.configFileServer, "wiretap server config output filename")
@@ -193,7 +197,6 @@ func (c configureCmdConfig) Run() {
 	
 	err = serverConfigRelay.SetPort(serverPort)
 	check("failed to set port", err)
-	
 
 	clientConfigRelayArgs := peer.ConfigArgs{
 		ListenPort: clientPort,
@@ -239,6 +242,7 @@ func (c configureCmdConfig) Run() {
 				PublicKey:  serverConfigE2EE.GetPublicKey(),
 				AllowedIPs: c.allowedIPs,
 				Endpoint:   net.JoinHostPort(relaySubnet4.Addr().Next().Next().String(), fmt.Sprint(E2EEPort)),
+				Nickname:  c.nickname,
 			},
 		},
 		Addresses: clientE2EEAddrs,
