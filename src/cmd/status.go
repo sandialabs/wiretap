@@ -139,7 +139,7 @@ func (c statusCmdConfig) Run() {
      e2ee: %v... 
    
       api: %v 
-   routes: %v `, c.e2eeConfig.GetNickname(), c.relayConfig.GetPublicKey()[:8], c.e2eeConfig.GetPublicKey()[:8], api, strings.Join(ips, ","))))
+   routes: %v `, c.peerConfig.GetNickname(), c.relayConfig.GetPublicKey()[:8], c.e2eeConfig.GetPublicKey()[:8], api, strings.Join(ips, ","))))
 			child, err := t.Child(0)
 			check("could not build tree", err)
 			treeTraversal(node.children[i], child)

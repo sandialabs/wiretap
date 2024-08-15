@@ -89,7 +89,10 @@ func GetPeerConfig(args PeerConfigArgs) (PeerConfig, error) {
 	}
 	
 	if args.Nickname != "" {
-		c.SetNickname(args.Nickname)
+		err = c.SetNickname(args.Nickname)
+		if err != nil {
+			return PeerConfig{}, err
+		}
 	}
 
 	return c, nil

@@ -160,8 +160,8 @@ func ParseConfig(filename string) (c Config, err error) {
 						return c, e
 					}
 					err = c.SetMTU(mtu)
-				case "nickname":
-					err = c.SetNickname(value)
+				//case "nickname":
+					//err = c.SetNickname(value)
 				}
 				if err != nil {
 					return c, err
