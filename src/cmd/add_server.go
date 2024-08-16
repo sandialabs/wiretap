@@ -170,7 +170,6 @@ func (c addServerCmdConfig) Run() {
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
 			Endpoint:   net.JoinHostPort(newRelayPrefixes[0].Addr().Next().Next().String(), fmt.Sprint(E2EEPort)),
-			Nickname:   c.nickname,
 		})
 		check("failed to generate new e2ee peer", err)
 		clientConfigE2EE.AddPeer(serverE2EEPeer)
@@ -264,6 +263,7 @@ func (c addServerCmdConfig) Run() {
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
 			Endpoint:   net.JoinHostPort(addresses.NextServerRelayAddr4.String(), fmt.Sprint(E2EEPort)),
+			Nickname: c.nickname,
 		})
 		check("failed to parse server as peer", err)
 		clientConfigE2EE.AddPeer(serverPeerConfigE2EE)
