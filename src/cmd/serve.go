@@ -47,7 +47,6 @@ type serveCmdConfig struct {
 	keepaliveCount    uint
 	keepaliveInterval uint
 	disableV6         bool
-	nickname          string
 }
 
 type wiretapDefaultConfig struct {
@@ -83,7 +82,6 @@ var serveCmd = serveCmdConfig{
 	keepaliveCount:    3,
 	keepaliveInterval: 60,
 	disableV6:         false,
-	nickname:          "",
 }
 
 var wiretapDefault = wiretapDefaultConfig{
@@ -129,7 +127,6 @@ func init() {
 	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
 	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
 	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
-	cmd.Flags().StringVarP(&serveCmd.nickname, "nickname", "n", serveCmd.nickname, "nickname for server")
 	cmd.Flags().UintVarP(&serveCmd.catchTimeout, "completion-timeout", "", serveCmd.catchTimeout, "time in ms for client to complete TCP connection to server")
 	cmd.Flags().UintVarP(&serveCmd.connTimeout, "conn-timeout", "", serveCmd.connTimeout, "time in ms for server to wait for outgoing TCP handshakes to complete")
 	cmd.Flags().UintVarP(&serveCmd.keepaliveIdle, "keepalive-idle", "", serveCmd.keepaliveIdle, "time in seconds before TCP keepalives are sent to client")
@@ -174,8 +171,6 @@ func init() {
 	err = viper.BindPFlag("Relay.Interface.ipv6", cmd.Flags().Lookup("ipv6-relay"))
 	check("error binding flag to viper", err)
 	err = viper.BindPFlag("Relay.Interface.mtu", cmd.Flags().Lookup("mtu"))
-	check("error binding flag to viper", err)
-	err = viper.BindPFlag("Relay.Interface.nickname", cmd.Flags().Lookup("nickname"))
 	check("error binding flag to viper", err)
 
 	err = viper.BindPFlag("Relay.Peer.publickey", cmd.Flags().Lookup("public-relay"))
@@ -323,7 +318,6 @@ func (c serveCmdConfig) Run() {
 	configRelayArgs := peer.ConfigArgs{
 		PrivateKey: viper.GetString("Relay.Interface.privatekey"),
 		ListenPort: viper.GetInt("Relay.Interface.port"),
-		Nickname: viper.GetString("Relay.Interface.nickname"),
 		Peers: []peer.PeerConfigArgs{
 			{
 				PublicKey: viper.GetString("Relay.Peer.publickey"),
