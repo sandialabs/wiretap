@@ -276,7 +276,7 @@ func (p *PeerConfig) AsFile() string {
 	
 	//Custom fields
 	if p.nickname != "" {
-		s.WriteString(fmt.Sprintf("#@Nickname = %s\n", p.nickname))
+		s.WriteString(fmt.Sprintf("%sNickname = %s\n", CUSTOM_PREFIX, p.nickname))
 	}
 
 	return s.String()

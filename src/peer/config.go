@@ -44,6 +44,8 @@ const (
 	PowerShell
 )
 
+const CUSTOM_PREFIX = "#@"
+
 func GetConfig(args ConfigArgs) (Config, error) {
 	c, err := NewConfig()
 	if err != nil {
@@ -162,7 +164,7 @@ func ParseConfig(filename string) (c Config, err error) {
 					continue
 				}
 				
-				if line[:2] == "#@" { //special wiretap-specific values
+				if line[:2] == CUSTOM_PREFIX { //special wiretap-specific values
 					line = line[2:]
 				} else if line[0] == '#' {
 					continue
@@ -413,7 +415,6 @@ func (c *Config) AsShareableFile() string {
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", c.config.PrivateKey.PublicKey().String()))
 	s.WriteString("AllowedIPs = 0.0.0.0/32\n")
 	
-
 	return s.String()
 }
 
