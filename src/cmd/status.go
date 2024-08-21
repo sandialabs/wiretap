@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
-	//"log"
 
 	"github.com/fatih/color"
 	"github.com/m1gwings/treedrawer/tree"
@@ -77,7 +76,7 @@ func (c statusCmdConfig) Run() {
 	// Key on public key of relay interfaces.
 	nodes := make(map[string]Node)
 	var errorNodes []Node
-	e2ee_peer_list := clientConfigE2EE.GetPeers()
+	e2ee_peer_list := client.e2eeConfig.GetPeers()
 	for _, ep := range e2ee_peer_list {
 		relayConfig, e2eeConfig, err := api.ServerInfo(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
 		if err != nil {
