@@ -194,7 +194,7 @@ func error_wrap(text string, lineWidth int) string {
 	spaceLeft := lineWidth - len(wrapped)
 	for _, word := range words[1:] {
 		if len(word)+1 > spaceLeft {
-			wrapped += "\n        " + word
+			wrapped += " \n        " + word
 			spaceLeft = lineWidth - len(word)
 		} else {
 			wrapped += " " + word
