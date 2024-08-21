@@ -132,7 +132,7 @@ func (c statusCmdConfig) Run() {
 			ips := []string{}
 			var api string
 			for j, a := range c.peerConfig.GetAllowedIPs() {
-				if j == len(c.peerConfig.GetAllowedIPs())-1 {
+				if j == len(c.peerConfig.GetAllowedIPs()) - 1 {
 					api = a.IP.String()
 				} else {
 					ips = append(ips, a.String())
@@ -158,15 +158,15 @@ func (c statusCmdConfig) Run() {
 	fmt.Println()
 	
 	if len(errorNodes) > 0 {
-		// Display known nodes that we had issues connecting to
-		fmt.Fprintln(color.Output, WhiteBold("Nodes with Errors:"))
+		// Display known peers that we had issues connecting to
+		fmt.Fprintln(color.Output, WhiteBold("Peers with Errors:"))
 		fmt.Println()
 		
 		for _, node := range errorNodes {
 			ips := []string{}
 			var api string
 			for j, a := range node.peerConfig.GetAllowedIPs() {
-				if j == len(node.peerConfig.GetAllowedIPs())-1 {
+				if j == len(node.peerConfig.GetAllowedIPs()) - 1 {
 					api = a.IP.String()
 				} else {
 					ips = append(ips, a.String())
@@ -175,7 +175,7 @@ func (c statusCmdConfig) Run() {
 			
 			t = tree.NewTree(tree.NodeString(fmt.Sprintf(`server
 
-     peer: %v... 
+     e2ee: %v... 
       api: %v 
    routes: %v 
 
