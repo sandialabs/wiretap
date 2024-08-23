@@ -25,6 +25,7 @@ type addServerCmdConfig struct {
 	configFileServer string
 	writeToClipboard bool
 	port             int
+	nickname         string
 }
 
 var addServerCmdArgs = addServerCmdConfig{
@@ -35,6 +36,7 @@ var addServerCmdArgs = addServerCmdConfig{
 	configFileServer: ConfigServer,
 	writeToClipboard: false,
 	port:             USE_ENDPOINT_PORT,
+	nickname:         "",
 }
 
 // addServerCmd represents the server command.
@@ -53,6 +55,7 @@ func init() {
 	addServerCmd.Flags().StringSliceVarP(&addServerCmdArgs.allowedIPs, "routes", "r", addServerCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.serverAddress, "server-address", "s", addServerCmdArgs.serverAddress, "API address of server that new server will connect to, connects to client by default")
 	addServerCmd.Flags().IntVarP(&addServerCmdArgs.port, "port", "p", addServerCmdArgs.port, "listener port to start on new server for wireguard relay. If --outbound, default is the port specified in --endpoint; otherwise default is 51820")
+	addServerCmd.Flags().StringVarP(&addServerCmdArgs.nickname, "nickname", "n", addServerCmdArgs.nickname, "Server nickname to display in 'status' command")
 	addServerCmd.Flags().BoolVarP(&addServerCmdArgs.writeToClipboard, "clipboard", "c", addServerCmdArgs.writeToClipboard, "copy configuration args to clipboard")
 	
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileRelay, "relay-input", "", addServerCmdArgs.configFileRelay, "filename of input relay config file")
@@ -167,6 +170,7 @@ func (c addServerCmdConfig) Run() {
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
 			Endpoint:   net.JoinHostPort(newRelayPrefixes[0].Addr().Next().Next().String(), fmt.Sprint(E2EEPort)),
+			Nickname: c.nickname,
 		})
 		check("failed to generate new e2ee peer", err)
 		clientConfigE2EE.AddPeer(serverE2EEPeer)
@@ -260,6 +264,7 @@ func (c addServerCmdConfig) Run() {
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
 			Endpoint:   net.JoinHostPort(addresses.NextServerRelayAddr4.String(), fmt.Sprint(E2EEPort)),
+			Nickname: c.nickname,
 		})
 		check("failed to parse server as peer", err)
 		clientConfigE2EE.AddPeer(serverPeerConfigE2EE)
