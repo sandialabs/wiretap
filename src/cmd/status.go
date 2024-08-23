@@ -175,11 +175,12 @@ func (c statusCmdConfig) Run() {
 			
 			t = tree.NewTree(tree.NodeString(fmt.Sprintf(`server
 
-     e2ee: %v... 
-      api: %v 
-   routes: %v 
+ nickaname: %v 
+      e2ee: %v... 
+       api: %v 
+    routes: %v 
 
- error: %v`, node.peerConfig.GetPublicKey().String()[:8], api, strings.Join(ips, ","), errorWrap(node.error, 80))))
+ error: %v`, node.peerConfig.GetNickname(), node.peerConfig.GetPublicKey().String()[:8], api, strings.Join(ips, ","), errorWrap(node.error, 80))))
 			fmt.Fprintln(color.Output, WhiteBold(t))
 		}
 	}
