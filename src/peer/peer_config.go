@@ -257,9 +257,14 @@ func (p *PeerConfig) SetNickname(nickname string) error {
 
 func (p *PeerConfig) AsFile() string {
 	var s strings.Builder
-
 	s.WriteString("[Peer]\n")
+	
+	if p.nickname != "" {
+		s.WriteString(fmt.Sprintf("%s Nickname = %s\n", CUSTOM_PREFIX, p.nickname))
+	}
+	
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", p.config.PublicKey.String()))
+	
 	ips := []string{}
 	for _, a := range p.config.AllowedIPs {
 		ips = append(ips, a.String())
@@ -272,11 +277,6 @@ func (p *PeerConfig) AsFile() string {
 	}
 	if p.config.PersistentKeepaliveInterval != nil {
 		s.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", *p.config.PersistentKeepaliveInterval/time.Second))
-	}
-	
-	//Custom fields
-	if p.nickname != "" {
-		s.WriteString(fmt.Sprintf("%sNickname = %s\n", CUSTOM_PREFIX, p.nickname))
 	}
 
 	return s.String()

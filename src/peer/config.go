@@ -164,8 +164,8 @@ func ParseConfig(filename string) (c Config, err error) {
 					continue
 				}
 				
-				if line[:2] == CUSTOM_PREFIX { //special wiretap-specific values
-					line = line[2:]
+				if strings.HasPrefix(line, CUSTOM_PREFIX) { //special wiretap-specific values
+					line = line[len(CUSTOM_PREFIX):]
 				} else if line[0] == '#' {
 					continue
 				}
