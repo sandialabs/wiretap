@@ -178,22 +178,23 @@ func (c statusCmdConfig) Run() {
       api: %v 
    routes: %v 
 
- error: %v`, node.peerConfig.GetPublicKey().String()[:8], api, strings.Join(ips, ","), error_wrap(node.error, 80))))
+ error: %v`, node.peerConfig.GetPublicKey().String()[:8], api, strings.Join(ips, ","), errorWrap(node.error, 80))))
 			fmt.Fprintln(color.Output, WhiteBold(t))
 		}
 	}
 }
 
-func error_wrap(text string, lineWidth int) string {
+func errorWrap(text string, lineWidth int) string {
 	words := strings.Fields(strings.TrimSpace(text))
 	if len(words) == 0 {
 		return text
 	}
 	wrapped := words[0]
 	spaceLeft := lineWidth - len(wrapped)
+	indent := len(" error: ")
 	for _, word := range words[1:] {
 		if len(word)+1 > spaceLeft {
-			wrapped += " \n        " + word
+			wrapped += " \n" + strings.Repeat(" ", indent) + word
 			spaceLeft = lineWidth - len(word)
 		} else {
 			wrapped += " " + word
