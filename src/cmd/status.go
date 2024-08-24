@@ -175,7 +175,7 @@ func (c statusCmdConfig) Run() {
 			
 			t = tree.NewTree(tree.NodeString(fmt.Sprintf(`server
 
- nickaname: %v 
+ nickname: %v 
       e2ee: %v... 
        api: %v 
     routes: %v 
