@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
-	"log"
 
 	"github.com/fatih/color"
 	"github.com/m1gwings/treedrawer/tree"
@@ -54,6 +53,7 @@ func (c statusCmdConfig) Run() {
 		relayConfig peer.Config
 		e2eeConfig  peer.Config
 		children    []*Node
+		error       string
 	}
 
 	var err error
@@ -75,12 +75,16 @@ func (c statusCmdConfig) Run() {
 	// Get map of all nodes for building tree.
 	// Key on public key of relay interfaces.
 	nodes := make(map[string]Node)
-	e2ee_peer_list := clientConfigE2EE.GetPeers()
+	var errorNodes []Node
+	e2ee_peer_list := client.e2eeConfig.GetPeers()
 	for _, ep := range e2ee_peer_list {
 		relayConfig, e2eeConfig, err := api.ServerInfo(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
 		if err != nil {
-			message := "failed to fetch node's configuration as peer"
-			log.Printf("%s: %v", message, err)
+			errorNodes = append(errorNodes, Node{
+				peerConfig:  ep,
+				error:       err.Error(),
+			})
+			
 		} else {
 			nodes[relayConfig.GetPublicKey()] = Node{
 				peerConfig:  ep,
@@ -127,7 +131,7 @@ func (c statusCmdConfig) Run() {
 			ips := []string{}
 			var api string
 			for j, a := range c.peerConfig.GetAllowedIPs() {
-				if j == len(c.peerConfig.GetAllowedIPs())-1 {
+				if j == len(c.peerConfig.GetAllowedIPs()) - 1 {
 					api = a.IP.String()
 				} else {
 					ips = append(ips, a.String())
@@ -149,6 +153,56 @@ func (c statusCmdConfig) Run() {
 	check("could not build tree", err)
 	treeTraversal(&client, child)
 
-	fmt.Fprintln(color.Output)
+	fmt.Println()
 	fmt.Fprintln(color.Output, WhiteBold(t))
+	fmt.Println()
+	
+	if len(errorNodes) > 0 {
+		// Display known peers that we had issues connecting to
+		fmt.Fprintln(color.Output, WhiteBold("Peers with Errors:"))
+		fmt.Println()
+		
+		for _, node := range errorNodes {
+			ips := []string{}
+			var api string
+			for j, a := range node.peerConfig.GetAllowedIPs() {
+				if j == len(node.peerConfig.GetAllowedIPs()) - 1 {
+					api = a.IP.String()
+				} else {
+					ips = append(ips, a.String())
+				}
+			}
+			
+			t = tree.NewTree(tree.NodeString(fmt.Sprintf(`server
+
+ nickname: %v 
+      e2ee: %v... 
+       api: %v 
+    routes: %v 
+
+ error: %v`, node.peerConfig.GetNickname(), node.peerConfig.GetPublicKey().String()[:8], api, strings.Join(ips, ","), errorWrap(node.error, 80))))
+			fmt.Fprintln(color.Output, WhiteBold(t))
+		}
+	}
+}
+
+func errorWrap(text string, lineWidth int) string {
+	words := strings.Fields(strings.TrimSpace(text))
+	if len(words) == 0 {
+		return text
+	}
+	wrapped := words[0]
+	spaceLeft := lineWidth - len(wrapped)
+	indent := len(" error: ")
+	for _, word := range words[1:] {
+		if len(word)+1 > spaceLeft {
+			wrapped += " \n" + strings.Repeat(" ", indent) + word
+			spaceLeft = lineWidth - len(word)
+		} else {
+			wrapped += " " + word
+			spaceLeft -= 1 + len(word)
+		}
+	}
+
+	return wrapped
 }
