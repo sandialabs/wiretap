@@ -13,14 +13,14 @@ In this diagram, the Client has generated and installed WireGuard configuration 
 </div>
 
 # Table of Contents
-[Terminology and Requirements](#Terminology-and-Requirements)
-[Quick Start](#Quick-Start)
-[Installation](#Installation)
-[How it Works](#How-it-Works)
-[Usage](#Usage)
-[Features](#Features)
-[Demo](#Demo)
-[Experimental](#Experimental)
+- [Terminology and Requirements](#Terminology-and-Requirements)
+- [Quick Start](#Quick-Start)
+- [Installation](#Installation)
+- [How it Works](#How-it-Works)
+- [Usage](#Usage)
+- [Features](#Features)
+- [Demo](#Demo)
+- [Experimental](#Experimental)
 
 
 # Terminology and Requirements
