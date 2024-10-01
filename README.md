@@ -87,7 +87,7 @@ To build secure and scalable tunnels across multiple hops, each node in the Wire
 
 <div align="center">
 
-![Wiretap E2EE Architecture](media/Wiretap_E2EE.svg)
+![Wiretap E2EE Architecture](media/Wiretap_E2EE.svg?raw=true)
 </div>
 
 ## Details
