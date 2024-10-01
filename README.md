@@ -117,9 +117,11 @@ Following the example in the diagram:
 ./wiretap configure --endpoint 1.3.3.7:1337 --routes 10.0.0.0/24
 ```
 
+---
+
 <details>
 
-<summary>Output</summary>
+<summary>Click to view output</summary>
 
 ```
 Configurations successfully generated.
@@ -162,6 +164,8 @@ Config File:  ./wiretap serve -f wiretap_server.conf
 ```
 </details>
 
+---
+
 > [!NOTE]
 > The 51821 ListenPort in `wiretap.conf` needs to be available for use on the Client, but does NOT need to be accessible to the Server over real-world networks. See the [How It Works](#how-it-works) section for details. Use `--simple` in both the `config` command and the Server's `serve` command if your setup requires a single interface on the Client
 
@@ -180,9 +184,9 @@ Don't forget to disable or remove the tunnels when you're done (e.g., `sudo wg-q
 
 ## Serve
 
-On the remote machine, upload the Wiretap binary and then copy the command with the private and public keys to start Wiretap in server mode:
+On the remote machine, upload the Wiretap binary and then run one of the commands from the output of `configure` to start Wiretap in server mode:
 ```powershell
-$env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y="; $env:WIRETAP_RELAY_PEER_PUBLICKEY="Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc="; $env:WIRETAP_RELAY_PEER_ENDPOINT="1.3.3.7:1337"; $env:WIRETAP_E2EE_INTERFACE_PRIVATEKEY="GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg="; $env:WIRETAP_E2EE_PEER_PUBLICKEY="cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM="; $env:WIRETAP_E2EE_PEER_ENDPOINT="172.16.0.1:51821"; .\wiretap.exe serve
+$env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y="; $env:WIRETAP_RELAY_INTERFACE_PORT="51820"; $env:WIRETAP_RELAY_PEER_PUBLICKEY="Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc="; $env:WIRETAP_RELAY_PEER_ENDPOINT="1.3.3.7:1337"; $env:WIRETAP_E2EE_INTERFACE_PRIVATEKEY="GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg="; $env:WIRETAP_E2EE_PEER_PUBLICKEY="cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM="; $env:WIRETAP_E2EE_PEER_ENDPOINT="172.16.0.1:51821"; .\wiretap.exe serve
 ```
 
 There are two other ways to pass arguments to the server:
@@ -238,7 +242,7 @@ You can view the state of the network and see API addresses with `./wiretap stat
 
 If you plan to attach a Server directly to the Client, the status command just confirms that everything is working as expected and the network layout is correct. If you want to attach a new Server to an existing Server you must also specify the existing Server's API address in your `add server` command using the `--server-address` argument; this API address **must** reference the same existing Server that the new Server will connect to via the `--endpoint` IP:port or else the new connection will fail.
 
-In this example, we will to the server with API address `::2`, which is listening on `10.0.0.2:51820`. This command will generate a configuration you can deploy to the new Server (through environment variables or a config), just like with the `configure` command:
+In this example, we will to the server with API address `::2`, which is listening on `10.0.0.2:51820`. This command will generate a configuration you can deploy to the new Server (through environment variables or a config file), just like with the `configure` command:
 
 ```bash
 ./wiretap add server --server-address ::2 --endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
