@@ -14,7 +14,7 @@ In this diagram, the Client has generated and installed WireGuard configuration 
 
 # Terminology and Requirements
 
-A Wiretap Server is any machine where a Wiretap binary is running the `serve` subcommand. Servers generate and receive network traffic on behalf of Wiretap Clients, acting like a VPN "exit node."
+A Wiretap Server is any machine where a Wiretap binary is running the `serve` command. Servers generate and receive network traffic on behalf of Wiretap Clients, acting like a VPN "exit node."
 
 A Wiretap Client is any machine running the Wireguard configurations necessary to send network traffic through a Wiretap Server. It functions much like a client in a VPN connection.
 
@@ -49,7 +49,7 @@ While not ideal, Wiretap can still work with TCP instead of UDP. See the experim
 3. Copy the server command output that best suits the Server OS and run it on the Server machine
 4. On the Client, run `sudo wg-quick up ./wiretap_relay.conf && sudo wg-quick up ./wiretap.conf` to import the configs into Wireguard
 5. Confirm the handshake completed for both configs by running `sudo wg show` on the Client
-6. (Optional) Add more servers and clients as needed with the `wiretap add` subcommand
+6. (Optional) Add more servers and clients as needed with the `wiretap add` command
 
 See the [Usage section](#Usage) for more details.
 
@@ -81,14 +81,39 @@ Within the E2EE network (i.e., accessible only to Clients), Wiretap Servers expo
 
 # Usage
 
-Wiretap provides the following subcommands, which are documented in this section:
+```bash
+./wiretap --help --show-hidden
+```
+```
+Usage:
+  wiretap [flags]
+  wiretap [command]
+
+Available Commands:
+  add         Add peer to wiretap
+  configure   Build wireguard config
+  expose      Expose local services to servers
+  help        Help about any command
+  ping        Ping wiretap server API
+  serve       Listen and proxy traffic into target network
+  status      Show peer layout
+
+Flags:
+  -h, --help          help for wiretap
+  -H, --show-hidden   show hidden flag options
+  -v, --version       version for wiretap
+
+Use "wiretap [command] --help" for more information about a command.
+```
+
+The following commands are documented in this section:
 * [configure](#Configure)
 * [serve](#Serve)
 * [add server](#Add-Server-(Optional))
 * [add client](#Add-Client-(Optional))
 * [expose](#Expose-(Port-Forwarding))
 
-Get help for any subcommand by adding the `-h` flag to it.
+Get help for any command by adding the `-h` flag to it.
 
 > [!TIP]
 > Some deprecated and less-common flags are hidden from the standard help output. Add the `-H` flag as well to see them.
@@ -100,7 +125,7 @@ Get help for any subcommand by adding the `-h` flag to it.
 ![Wiretap Configure Arguments](media/Wiretap_Configure.svg)
 </div>
 
-On the Client machine, run Wiretap's `configure` subcommand to generate starting config files:
+On the Client machine, run Wiretap's `configure` command to generate starting config files:
 
 ```bash
 ./wiretap configure --endpoint <IP>:<port> --routes <CIDRs>
@@ -207,7 +232,7 @@ Now the Client should be able to interact with the `routes` specified in the `co
 ![Wiretap Add Server Arguments](media/Wiretap_Add_Server.svg)
 </div>
 
-The `add server` subcommand is meant to extend the Wiretap network to reach new areas of a target network. At least one Client and Server must be configured and successfully deployed (i.e., with `configure`) before adding another Server. Servers can attach to any other Server *or* the Client itself.
+The `add server` command is meant to extend the Wiretap network to reach new areas of a target network. At least one Client and Server must be configured and successfully deployed (i.e., with `configure`) before adding another Server. Servers can attach to any other Server *or* the Client itself.
 
 > [!WARNING]
 > Due to the way new Clients are added to existing networks, all Servers must be deployed *before* adding additional Clients. Added Clients won't be able to access Servers deployed after they were added. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
@@ -247,6 +272,14 @@ In this example, we will to the server with API address `::2`, which is listenin
 ```bash
 ./wiretap add server --server-address ::2 --endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
 ```
+
+
+---
+
+<details>
+
+<summary>Click to view output</summary>
+
 ```
 Configurations successfully generated.
 Import the updated config(s) into WireGuard locally and pass the arguments below to Wiretap on the new remote server.
@@ -277,6 +310,10 @@ POSIX Shell:  WIRETAP_RELAY_INTERFACE_PRIVATEKEY=sLERnxT2+VdwwcJOTUHK5fa5sIN7oJ1
  PowerShell:  $env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="sLERnxT2+VdwwcJOTUHK5fa5sIN7oJ1Jww9n42txrEQ="; $env:WIRETAP_RELAY_INTERFACE_PORT="51820"; $env:WIRETAP_RELAY_INTERFACE_IPV4="172.17.0.3"; $env:WIRETAP_RELAY_INTERFACE_IPV6="fd:17::3"; $env:WIRETAP_RELAY_PEER_PUBLICKEY="kMj7HwfYYFO/XEHNFK2kz9cBd7vTHk63fhygyuYLMzI="; $env:WIRETAP_RELAY_PEER_ALLOWED="172.16.0.0/16,fd:16::/40"; $env:WIRETAP_RELAY_PEER_ENDPOINT="10.0.0.2:51820"; $env:WIRETAP_E2EE_INTERFACE_PRIVATEKEY="uF79x5X8q3Vd/ajWMR5XyDt/haahtpy5PkJj9b+OaUE="; $env:WIRETAP_E2EE_INTERFACE_API="::3"; $env:WIRETAP_E2EE_PEER_PUBLICKEY="cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM="; $env:WIRETAP_E2EE_PEER_ENDPOINT="172.16.0.1:51821"; .\wiretap.exe serve
 Config File:  ./wiretap serve -f wiretap_server_1.conf
 ```
+
+</details>
+
+---
 
 The Client's E2EE configuration (`wiretap.conf`) will be modified to allow communication with the new Server, so you need to reimport it. For example, `sudo wg-quick down ./wiretap.conf && sudo wg-quick up ./wiretap.conf`. If you are attaching a new Server directly to the Client, the Relay interface will also need to be refreshed in the same way.
 
@@ -328,7 +365,7 @@ Now the Client can reach `10.0.0.0/24` and `10.0.1.0/24`. From here you can atta
 ![Wiretap Add Client Arguments](media/Wiretap_Add_Client.svg)
 </div>
 
-The `add client` subcommand can be used to share access to the Wiretap network with others.
+The `add client` command can be used to share access to the Wiretap network with others.
 
 > [!WARNING]
 > All servers must be deployed *before* adding additional clients. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
@@ -338,6 +375,13 @@ Adding a new Client is very similar to the other commands. It will generate a `w
 ```bash
 ./wiretap add client --endpoint 1.3.3.8:1337 --port 1337
 ```
+
+---
+
+<details>
+
+<summary>Click to view output</summary>
+
 ```
 Configurations successfully generated.
 Have a friend import these files into WireGuard
@@ -376,6 +420,10 @@ Endpoint = 172.17.0.3:51821
 ────────────────────────────────
 ```
 
+</details>
+
+---
+
 Send these files and have the recipient import them into WireGuard to have access to everything in the Wiretap network! By default the routes (AllowedIPs) are copied over to the new client configs, but can be modified by the recipient as needed.
 
 ## Expose (Port Forwarding)
@@ -383,7 +431,7 @@ Send these files and have the recipient import them into WireGuard to have acces
 > **Warning**
 > Port forwarding exposes ports and services on your local machine to the remote network, use with caution
 
-You can expose a port on the Client to IPs in Wiretap's `routes` list by using the `expose` subcommand. For example, to allow remote systems to access port 80/tcp on your local Client machine, you could run:
+You can expose a port on the Client to IPs in Wiretap's `routes` list by using the `expose` command. For example, to allow remote systems to access port 80/tcp on your local Client machine, you could run:
 
 ```
 ./wiretap expose --local 80 --remote 8080
@@ -391,7 +439,7 @@ You can expose a port on the Client to IPs in Wiretap's `routes` list by using t
 
 Now all Wiretap Servers will be bound to listen on port 8080/tcp and proxy connections to your service on port 80/tcp. By default this uses IPv6, so make sure any exposed services listening on the Client support IPv6 as well.
 
-To configure Wiretap to only use IPv4, use the `configure` subcommand's `--disable-ipv6` option.
+To configure Wiretap to only use IPv4, use the `configure` command's `--disable-ipv6` option.
 
 > [!WARNING]
 > If a Wiretap server process exits or dies for any reason it will not remember ports it was previously exposing. You will need to re-expose any ports you configured with this command.
@@ -434,33 +482,6 @@ To build secure and scalable tunnels across multiple hops, each node in the Wire
 
 ![Wiretap E2EE Architecture](media/Wiretap_E2EE.svg)
 </div>
-
-# Help
-
-```bash
-./wiretap --help --show-hidden
-```
-```
-Usage:
-  wiretap [flags]
-  wiretap [command]
-
-Available Commands:
-  add         Add peer to wiretap
-  configure   Build wireguard config
-  expose      Expose local services to servers
-  help        Help about any command
-  ping        Ping wiretap server API
-  serve       Listen and proxy traffic into target network
-  status      Show peer layout
-
-Flags:
-  -h, --help          help for wiretap
-  -H, --show-hidden   show hidden flag options
-  -v, --version       version for wiretap
-
-Use "wiretap [command] --help" for more information about a command.
-```
 
 # Features
 
