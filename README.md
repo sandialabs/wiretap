@@ -93,16 +93,21 @@ To build secure and scalable tunnels across multiple hops, each node in the Wire
 </div>
 
 ## Details
+
+### Relay Network
 Client-to-Server and Server-to-Server connections are established using a "Relay" Wireguard tunnel (`wiretap_relay.conf`). These UDP connections occur over real-world TCP/IP network infrastructure. Each Relay tunnel connects one Wiretap instance (Server or Client) directly to one other instance. They become Wireguard peers, able to pass encrypted messages back and forth between each other. When a new Server or Client is added to the Wiretap network, it is attached to an existing Server by creating a new Relay tunnel between them. These Relay tunnels are very similar to how Wireguard is traditionally used. Relay interfaces receive internal Wireguard IPs: `172.16.X.X` for IPv4, and `fd:16::X` for IPv6.
 
+### E2EE Network
 Inside the Relay network, Wiretap establishes a second virtual End-to-End Encrypted (`E2EE`) network (`wiretap.conf`). Each Server and Client gets its own unique internal IP addresses inside this network, assigned to a separate E2EE interface: `172.19.X.X` for IPv4, and `fd:19::X` for IPv6. As the E2EE name suggests, each Client-Server pair within this virtual network become Wireguard peers, able to generate encrypted messages that only the other can decrypt.
 
+### Routing
 Wiretap Clients track which real-world IP ranges ("routes") have been assigned to each Server inside the Relay network. When the Client machine generates a packet destined for a known Wiretap route, Wireguard encrypts it using the E2EE configuration associated with the Server assigned to that route. The encrypted packet (now a UDP datagram) gets marked with the Relay IP address of the assigned server as its destination.
 
 At this point, the Client may not have a direct relay connection to the destination Server, so the chain of Servers within the Relay network act much like standard TCP/IP routers. The Client passes the datagram to the first Server through their Relay tunnel, adding a layer of Relay encryption that only that Server's Relay interface can decrypt. The Server receives the datagram, decrypts the Relay payload, identifies which of its peer Servers in the Relay network the E2EE datagram should be sent to next, and sends it off via the associated relay tunnel. The datagram receives a new layer of Relay encryption as it leaves the Server.
 
 The process repeats until the packet reaches the intended Wiretap Server. That Server is finally able to decrypt the E2EE encryption (using its E2EE peer configuration for the Client), revealing the original packet data. It sends the packet to the real-world IP address indicated in the packet header, and forwards any response packets back to the Client using the same process.
 
+### API
 Within the E2EE network (i.e., accessible only to legitimate Clients), Wiretap Servers expose an API to enable real-time configuration changes and to monitor the health of the Wiretap network. Each Server is dynamically assigned an additional unique IP (usually an IPv6 address, such as `::2`) inside the E2EE network to enable the secure usage of this API. This IP is referred to as the "API address."
 
 # Usage
@@ -161,7 +166,7 @@ On the Client machine, run Wiretap's `configure` command to generate starting co
 * `--routes` is the equivalent of WireGuard's `AllowedIPs` setting. This tells the Client to route traffic that matches these IP ranges through Wiretap.
 
 > [!IMPORTANT]
-> By default the listening port will be configured to be the same as the port specified in the `--endpoint` IP:port. This can be overwritten using the `--port` argument.
+> By default the listening port will be configured to be the same as the port specified in the `--endpoint IP:port`. This can be overwritten using the `--port` argument.
 
 Following the example in the diagram:
 ```bash
