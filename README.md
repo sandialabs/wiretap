@@ -5,11 +5,13 @@
 Wiretap is a transparent, VPN-like proxy server that tunnels traffic via WireGuard and requires no special privileges to run.
 </div>
 
-In this diagram, the Client has generated and installed WireGuard configuration files that will route traffic destined for `10.0.0.0/24` through a WireGuard interface. Wiretap is then deployed to the Server with a configuration that connects to the Client as a WireGuard peer. The client can then interact with resources local to the Server as if on the same network, and optionally chain additional servers to reach new networks. Access to the Wiretap network can also be shared with other Clients.
+In this diagram, the Client has generated and installed WireGuard configuration files that will route traffic destined for `10.0.0.0/24` through a WireGuard interface. Wiretap is then deployed to the Server with a configuration that connects to the Client as a WireGuard peer. The Client can then interact with local network resources as if on the same network as the Server, and optionally chain additional Servers to reach new networks. Access to the Wiretap network can also be shared with other Clients.
 
 <div align="center">
 
 ![Wiretap Diagram](media/Wiretap_Animated.svg)
+
+[(Static Version)](media/Wiretap_Static.svg?raw=true)
 </div>
 
 # Table of Contents
@@ -25,17 +27,17 @@ In this diagram, the Client has generated and installed WireGuard configuration 
 
 # Terminology and Requirements
 
-A Wiretap Server is any machine where a Wiretap binary is running the `serve` command. Servers generate and receive network traffic on behalf of Wiretap Clients, acting like a VPN "exit node."
+A Wiretap Server is any machine where a Wiretap binary is running the `serve` command. Servers receive and relay network traffic on behalf of Wiretap Clients, acting like a VPN "exit node."
 
-A Wiretap Client is any machine running the Wireguard configurations necessary to send network traffic through a Wiretap Server. It functions much like a client in a VPN connection. Clients are also able to reconfigure parts of the Wiretap network dynamically using the Wiretap binary. 
+A Wiretap Client is any machine running the [Wireguard](https://www.wireguard.com/) configurations necessary to send and receive network traffic through a Wiretap Server. It functions much like a client in a VPN connection. Clients are also able to reconfigure parts of the Wiretap network dynamically using the Wiretap binary.
 
 > [!IMPORTANT]
 > Unlike the typical use of "client" and "server" terms in networking, Wiretap's Client and Server terms have nothing to do with which machine listens for or initiates the initial connection.
 
 ## Client System Requirements
 
-* WireGuard - https://www.wireguard.com/install/
-* Privileged access necessary to configure WireGuard
+* WireGuard installed - https://www.wireguard.com/install/
+* Privileged access necessary to configure WireGuard interfaces (usually root/admin access)
 
 
 ## Server System Requirements
@@ -45,20 +47,20 @@ A Wiretap Client is any machine running the Wireguard configurations necessary t
 
 ## Environment Requirements
 
-* Bidirectional UDP communication between Server and Client on one port. Any firewalls between them must allow at least one machine to initiate the UDP connection to the other.
+* Bidirectional UDP communication between Server and Client on one port. Any firewalls between them must allow at least one machine to initiate a UDP connection to the other.
     * The machine receiving the initial connection (the Client by default) must be able to listen for UDP connections on a port that the initiating machine can connect to.
 
 > [!NOTE]
 > By default the Server initiates the handshake to the Client because the Server is more likely to have outbound UDP allowed through a firewall than inbound UDP, but the reverse is easily configurable.
 
-While not ideal, Wiretap can still work with TCP instead of UDP. See the experimental [TCP Tunneling](#tcp-tunneling) section for more info.
+While not ideal, Wiretap can work with TCP instead of UDP. See the experimental [TCP Tunneling](#tcp-tunneling) section for more info.
 
 # Quick Start
 
 1. Download binaries from the [releases](https://github.com/sandialabs/wiretap/releases) page, one for your Client machine and one for your Server machine (if different os/arch). Copy the Wiretap binary onto the server
-2. On the Client, run `./wiretap configure --endpoint <IP>:<port> --routes <CIDRs>` with the appropriate arguments
+2. On the Client, run `./wiretap configure --endpoint <IP>:<port> --routes <CIDRs>` with the [appropriate arguments](#Configure)
 3. Copy the server command output that best suits the Server OS and run it on the Server machine
-4. On the Client, run `sudo wg-quick up ./wiretap_relay.conf && sudo wg-quick up ./wiretap.conf` to import the configs into Wireguard
+4. On the Client, run `sudo wg-quick up ./wiretap_relay.conf && sudo wg-quick up ./wiretap.conf` create the associated Wireguard interfaces
 5. Confirm the handshake completed for both configs by running `sudo wg show` on the Client
 6. (Optional) Add more servers and clients as needed with the `wiretap add` command
 
@@ -148,7 +150,7 @@ On the Client machine, run Wiretap's `configure` command to generate starting co
 
 Following the example in the diagram:
 ```bash
-./wiretap configure --endpoint 1.3.3.7:1337 --routes 10.0.0.0/24
+./wiretap configure --endpoint 7.1.1.3:1337 --routes 10.0.0.0/24
 ```
 
 ---
@@ -192,8 +194,8 @@ Endpoint = 172.17.0.2:51821
 server config: wiretap_server.conf
 
 server command:
-POSIX Shell:  WIRETAP_RELAY_INTERFACE_PRIVATEKEY=WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y= WIRETAP_RELAY_INTERFACE_PORT=51820 WIRETAP_RELAY_PEER_PUBLICKEY=Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc= WIRETAP_RELAY_PEER_ENDPOINT=1.3.3.7:1337 WIRETAP_E2EE_INTERFACE_PRIVATEKEY=GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg= WIRETAP_E2EE_PEER_PUBLICKEY=cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM= WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve
- PowerShell:  $env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y="; $env:WIRETAP_RELAY_INTERFACE_PORT="51820"; $env:WIRETAP_RELAY_PEER_PUBLICKEY="Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc="; $env:WIRETAP_RELAY_PEER_ENDPOINT="1.3.3.7:1337"; $env:WIRETAP_E2EE_INTERFACE_PRIVATEKEY="GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg="; $env:WIRETAP_E2EE_PEER_PUBLICKEY="cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM="; $env:WIRETAP_E2EE_PEER_ENDPOINT="172.16.0.1:51821"; .\wiretap.exe serve
+POSIX Shell:  WIRETAP_RELAY_INTERFACE_PRIVATEKEY=WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y= WIRETAP_RELAY_INTERFACE_PORT=51820 WIRETAP_RELAY_PEER_PUBLICKEY=Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc= WIRETAP_RELAY_PEER_ENDPOINT=7.1.1.3:1337 WIRETAP_E2EE_INTERFACE_PRIVATEKEY=GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg= WIRETAP_E2EE_PEER_PUBLICKEY=cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM= WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve
+ PowerShell:  $env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y="; $env:WIRETAP_RELAY_INTERFACE_PORT="51820"; $env:WIRETAP_RELAY_PEER_PUBLICKEY="Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc="; $env:WIRETAP_RELAY_PEER_ENDPOINT="7.1.1.3:1337"; $env:WIRETAP_E2EE_INTERFACE_PRIVATEKEY="GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg="; $env:WIRETAP_E2EE_PEER_PUBLICKEY="cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM="; $env:WIRETAP_E2EE_PEER_ENDPOINT="172.16.0.1:51821"; .\wiretap.exe serve
 Config File:  ./wiretap serve -f wiretap_server.conf
 ```
 </details>
@@ -205,32 +207,43 @@ Config File:  ./wiretap serve -f wiretap_server.conf
 
 Install the resulting `wiretap_relay.conf` and `wiretap.conf` configs files into WireGuard on the Client:
 
-* If using a GUI, select the menu option similar to *Import Tunnel(s) From File*
 * If you have `wg-quick` installed, run `sudo wg-quick up ./wiretap_relay.conf && sudo wg-quick up ./wiretap.conf`
+* If using a GUI, select the menu option similar to *Import Tunnel(s) From File*
 
 > [!TIP]
-> You can modify the AllowedIPs in the `wiretap.conf` file any time after generating the config files, just reload the config file with `wg-quick down ./wiretap.conf && wg-quick up ./wiretap.conf` after making the change. No changes are needed on the server to update them.
+> You can modify the AllowedIPs in the `wiretap.conf` file any time after generating the config files, just reload the config file with `wg-quick down ./wiretap.conf && wg-quick up ./wiretap.conf` (or re-import them into the GUI) after making the change. No changes are needed on the Server to update them.
 
 > [!WARNING]
 > In the default configuration, with the Client listening for an initial Server connection, the Server will still also listen on port 51820 so that other Servers can attach to it later. There is currently no way to change this when running the `configure` command, but when running `wiretap serve` you can manually change this in the `wiretap_server.conf` file, or using the `WIRETAP_RELAY_INTERFACE_PORT` environment variable.
 
 Don't forget to disable or remove the tunnels when you're done (e.g., `sudo wg-quick down ./wiretap.conf && sudo wg-quick down ./wiretap_relay.conf`)
 
+### Outbound Connections
+You can use the `--outbound` flag to configure the Client to Initiate the UDP connection to the Server. If you do, the `--endpoint` value will instead be used to tell the Client where to connect to the Server, and the `--port` value (explicit or implicit) will configure the Server's listening port.
+
+In this case the Client will listen on 51820 in case other Servers need to be added using the default Inbound mode, but this can be changed via the `ListenPort` variable in the `wiretap_relay.conf` file if needed.
+
+### Simple Mode
+While not recommended, you can add the `--simple` flag to configure Wiretap as a more traditional one-Client-and-one-Server VPN. Most of Wiretap's dynamic configuration features (any Wiretap commands you would run after establishing the initial connection) will be unavailable in this mode.
+
+> [!WARNING]
+> When starting the Server, you may need to also use the `--simple` flag. The Server currently does not support automatically detecting this configuration.
+
 ## Serve
 
-On the remote machine, upload the Wiretap binary and then run one of the commands from the output of `configure` to start Wiretap in server mode:
+On the remote machine, upload the Wiretap binary and then run one of the commands from the output of `configure` to start Wiretap in Server mode:
 ```powershell
 $env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y="; $env:WIRETAP_RELAY_INTERFACE_PORT="51820"; $env:WIRETAP_RELAY_PEER_PUBLICKEY="Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc="; $env:WIRETAP_RELAY_PEER_ENDPOINT="1.3.3.7:1337"; $env:WIRETAP_E2EE_INTERFACE_PRIVATEKEY="GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg="; $env:WIRETAP_E2EE_PEER_PUBLICKEY="cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM="; $env:WIRETAP_E2EE_PEER_ENDPOINT="172.16.0.1:51821"; .\wiretap.exe serve
 ```
 
-There are two other ways to pass arguments to the server:
-1. With the generated server config file: `-f wiretap_server.conf`
-2. The legacy method of passing command line arguments (`--endpoint 1.3.3.7:1337 ...`). Be aware that this method exposes the arguments to other users on the system. A compromised private key can be used to connect to the client as a peer and/or decrypt traffic
+There are two other ways to pass arguments to the Server:
+1. With the generated Server config file: `-f wiretap_server.conf`
+2. The legacy method of passing command line arguments (`--endpoint 7.1.1.3:1337 ...`). Be aware that this method exposes the arguments to other users on the system. A compromised private key can be used to connect to the Client as a peer and/or decrypt traffic
 
 > [!NOTE]
 > The wiretap_server.conf file uses a notation unique to Wiretap. It cannot be used to start a server with `wg-quick` or other generic Wireguard tools.
 
-Confirm that the relay interfaces on the Client and Server have successfully completed a handshake. The Client should see successful handshakes in whatever WireGuard interface is running. If using the command-line tools, check with `sudo wg show`. By default the E2EE handshake will not occur until the Client sends data, so you may need to attempt to use the connection (e.g. `ping` an IP in the associated `--routes`) to trigger the handshake process.
+Confirm that the Relay interfaces on the Client and Server have successfully completed a handshake. The Client should see successful handshakes in whatever WireGuard interface is running. If using the command-line tools, check with `sudo wg show`. By default the E2EE handshake will not occur until the Client sends data, so you may need to attempt to use the connection (e.g. `ping` an IP in the associated `--routes`) to trigger the handshake process.
 
 Now the Client should be able to interact with the `routes` specified in the `configure` command!
 
@@ -324,7 +337,7 @@ Config File:  ./wiretap serve -f wiretap_server_1.conf
 
 ---
 
-The Client's E2EE configuration (`wiretap.conf`) will be modified to allow communication with the new Server, so you need to reimport it. For example, `sudo wg-quick down ./wiretap.conf && sudo wg-quick up ./wiretap.conf`. If you are attaching a new Server directly to the Client, the Relay interface will also need to be refreshed in the same way.
+The Client's E2EE configuration (`wiretap.conf`) will be modified to allow communication with the new Server, so you need to re-import it. For example, `sudo wg-quick down ./wiretap.conf && sudo wg-quick up ./wiretap.conf`. If you are attaching a new Server directly to the Client, the Relay interface will also need to be refreshed in the same way.
 
 Now you can use any of the `serve` command options to start Wiretap on the new Server. It will then join the Wiretap network by connecting to the existing Server.
 
@@ -382,7 +395,7 @@ The `add client` command can be used to share access to the Wiretap network with
 Adding a new Client is very similar to the other commands. It will generate a `wiretap.conf` and `wiretap_relay.conf` for sharing. Make sure that all of the first-hop Servers (any Server directly attached to the original Client) can reach or be reached by the new Client or else the new Client won't have access to that chain of Servers. Once you get the endpoint information from whoever will be running the new Client (the IP and port they will listen on), run:
 
 ```bash
-./wiretap add client --endpoint 1.3.3.8:1337 --port 1337
+./wiretap add client --endpoint 7.1.1.4:1337 --port 1337
 ```
 
 ---
@@ -446,7 +459,7 @@ You can expose a port on the Client to IPs in Wiretap's `routes` list by using t
 ./wiretap expose --local 80 --remote 8080
 ```
 
-Now all Wiretap Servers will be bound to listen on port 8080/tcp and proxy connections to your service on port 80/tcp. By default this uses IPv6, so make sure any exposed services listening on the Client support IPv6 as well.
+Now all existing Wiretap Servers will bind listeners on port 8080/tcp and proxy connections from that port to your local Client machine on port 80/tcp. By default this uses IPv6, so make sure any exposed services listening on the Client support IPv6 as well.
 
 To configure Wiretap to only use IPv4, use the `configure` command's `--disable-ipv6` option.
 
@@ -459,13 +472,13 @@ To dynamically expose all ports on the Client using SOCKS5:
 ./wiretap expose --dynamic --remote 8080
 ```
 
-All servers will spin up a SOCKS5 server on port 8080 and proxy traffic to your local machine and can be used like this:
+All servers will spin up a SOCKS5 server on port 8080 and proxy traffic to your local machine. It and can be used like this:
 
 ```
-curl -x socks5://<server-ip>:8080 http://<any-ip>:1337
+curl -x socks5://<server-ip>:8080 http://<any-ip>:80
 ```
 
-The destination IP will be rewritten by the server so you can put any address.
+The destination IP will be rewritten by the Server so you can put any address.
 
 ### List
 
@@ -550,7 +563,7 @@ WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRE
 
 Clients can be attached to any Server in the network by using the `--server-address <api-address>` argument when running `wiretap add client`. This allows a Client on a different network than the first Client to still gain access to all of the Wiretap network's routes. However, the new Client will not be able to access any Servers that are part of a different chain connected to the first Client.
 
-As an example, consider a new Client (C2) that is added to the second server (S4) in the right branch of a Wiretap network. This new Client will only be able to access routes via the right branch of the network (S3 and S4) and not the left branch (S1 or S2) because the branches are only joined through an existing Client (C1). Clients does not route traffic from other Clients.
+As an example, consider a new Client (C2) that is added to the second server (S4) in the right branch of a Wiretap network. This new Client will only be able to access routes via the right branch of the network (S3 and S4) and not the left branch (S1 or S2) because the branches are only joined through an existing Client (C1). Clients do not route traffic from other Clients.
 
 ```
          ┌──────┐
