@@ -27,9 +27,9 @@ In this diagram, the Client has generated and installed WireGuard configuration 
 
 # Terminology and Requirements
 
-A Wiretap Server is any machine where a Wiretap binary is running the `serve` command. Servers receive and relay network traffic on behalf of Wiretap Clients, acting like a VPN "exit node."
+A **Wiretap Server** is any machine where a Wiretap binary is running the `serve` command. Servers receive and relay network traffic on behalf of Wiretap Clients, acting like a VPN "exit node."
 
-A Wiretap Client is any machine running the [Wireguard](https://www.wireguard.com/) configurations necessary to send and receive network traffic through a Wiretap Server. It functions much like a client in a VPN connection. Clients are also able to reconfigure parts of the Wiretap network dynamically using the Wiretap binary.
+A **Wiretap Client** is any machine running the [Wireguard](https://www.wireguard.com/) configurations necessary to send and receive network traffic through a Wiretap Server. It functions much like a client in a VPN connection. Clients are also able to reconfigure parts of the Wiretap network dynamically using the Wiretap binary.
 
 > [!IMPORTANT]
 > Unlike the typical use of "client" and "server" terms in networking, Wiretap's Client and Server terms have nothing to do with which machine listens for or initiates the initial connection.
