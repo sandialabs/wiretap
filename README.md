@@ -15,14 +15,28 @@ In this diagram, the Client has generated and installed WireGuard configuration 
 </div>
 
 # Table of Contents
-- [Terminology and Requirements](#Terminology-and-Requirements)
-- [Quick Start](#Quick-Start)
-- [Installation](#Installation)
-- [How it Works](#How-it-Works)
-- [Usage](#Usage)
-- [Features](#Features)
-- [Demo](#Demo)
-- [Experimental](#Experimental)
+- [Terminology and Requirements](#terminology-and-requirements)
+	- [Client System Requirements](#client-system-requirements)
+	- [Server System Requirements](#server-system-requirements)
+	- [Environment Requirements](#environment-requirements)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [How it Works](#how-it-works)
+- [Usage](#usage)
+	- [Configure](#configure)
+		- [Outbound Connections](#outbound-connections)
+		- [Simple Mode](#simple-mode)
+	- [Serve](#serve)
+	- [Add Server (Optional)](#add-server-optional)
+	- [Add Client (Optional)](#add-client-optional)
+	- [Expose (Port Forwarding)](#expose-port-forwarding)
+		- [List](#list)
+		- [Remove](#remove)
+- [Features](#features)
+- [Demo](#demo)
+- [Experimental](#experimental)
+	- [TCP Tunneling](#tcp-tunneling)
+	- [Add Clients To Any Server](#add-clients-to-any-server)
 
 
 # Terminology and Requirements
