@@ -27,6 +27,7 @@ In this diagram, the Client has generated and installed WireGuard configuration 
 		- [Outbound Connections](#outbound-connections)
 		- [Simple Mode](#simple-mode)
 	- [Serve](#serve)
+  - [Status](#status)
 	- [Add Server (Optional)](#add-server-optional)
 	- [Add Client (Optional)](#add-client-optional)
 	- [Expose (Port Forwarding)](#expose-port-forwarding)
@@ -134,6 +135,7 @@ Use "wiretap [command] --help" for more information about a command.
 The following commands are documented in this section:
 * [configure](#Configure)
 * [serve](#Serve)
+* [status](#Status)
 * [add server](#Add-Server-Optional)
 * [add client](#Add-Client-Optional)
 * [expose](#Expose-Port-Forwarding)
@@ -261,19 +263,9 @@ Confirm that the Relay interfaces on the Client and Server have successfully com
 
 Now the Client should be able to interact with the `routes` specified in the `configure` command!
 
-## Add Server (Optional)
+## Status
 
-<div align="center">
-
-![Wiretap Add Server Arguments](media/Wiretap_Add_Server.svg)
-</div>
-
-The `add server` command is meant to extend the Wiretap network to reach new areas of a target network. At least one Client and Server must be configured and successfully deployed (i.e., with `configure`) before adding another Server. Servers can attach to any other Server *or* the Client itself.
-
-> [!WARNING]
-> Due to the way new Clients are added to existing networks, all Servers must be deployed *before* adding additional Clients. Added Clients won't be able to access Servers deployed after they were added. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
-
-You can view the state of the network and see API addresses with `./wiretap status`
+Once the client configs have been imported and Wireguard is started, you can view the state of the network and see Server API addresses with `./wiretap status`.
 
 ```bash
 ./wiretap status
@@ -301,9 +293,21 @@ You can view the state of the network and see API addresses with `./wiretap stat
   ╰─────────────────────╯
 ```
 
-If you plan to attach a Server directly to the Client, the status command just confirms that everything is working as expected and the network layout is correct. If you want to attach a new Server to an existing Server you must also specify the existing Server's API address in your `add server` command using the `--server-address` argument; this API address **must** reference the same existing Server that the new Server will connect to via the `--endpoint` IP:port or else the new connection will fail.
+## Add Server (Optional)
 
-In this example, we will to the server with API address `::2`, which is listening on `10.0.0.2:51820`. This command will generate a configuration you can deploy to the new Server (through environment variables or a config file), just like with the `configure` command:
+<div align="center">
+
+![Wiretap Add Server Arguments](media/Wiretap_Add_Server.svg)
+</div>
+
+The `add server` command is meant to extend the Wiretap network to reach new areas of a target network. At least one Client and Server must be configured and successfully deployed (i.e., with `configure`) before adding another Server. Servers can attach to any other Server *or* the Client itself.
+
+> [!WARNING]
+> Due to the way new Clients are added to existing networks, all Servers must be deployed *before* adding additional Clients. Added Clients won't be able to access Servers deployed after they were added. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
+
+If you want to attach a new Server to an existing Server (rather than the Client) you must also specify the existing Server's API address in your `add server` command using the `--server-address` argument; this API address **must** reference the same existing Server that the new Server will connect to via the `--endpoint` IP:port or else the new connection will fail. You can view Server API addresses using the `status` command.
+
+In this example, we will connect to the server that has API address `::2`, which is listening on `10.0.0.2:51820`:
 
 ```bash
 ./wiretap add server --server-address ::2 --endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
@@ -351,9 +355,9 @@ Config File:  ./wiretap serve -f wiretap_server_1.conf
 
 ---
 
-The Client's E2EE configuration (`wiretap.conf`) will be modified to allow communication with the new Server, so you need to re-import it. For example, `sudo wg-quick down ./wiretap.conf && sudo wg-quick up ./wiretap.conf`. If you are attaching a new Server directly to the Client, the Relay interface will also need to be refreshed in the same way.
+This command will modify the Client's E2EE configuration (`wiretap.conf`) to allow communication with the new Server, so you need to re-import it. For example, `sudo wg-quick down ./wiretap.conf && sudo wg-quick up ./wiretap.conf`. If you are attaching a new Server directly to the Client, the Relay config will also need to be refreshed in the same way.
 
-Now you can use any of the `serve` command options to start Wiretap on the new Server. It will then join the Wiretap network by connecting to the existing Server.
+Now you can use any of the `serve` command options to start Wiretap on the new Server, just like you did after running the `config` command. It will then join the Wiretap network by connecting to the existing Server.
 
 At this point the new routes should be usable! You can confirm that everything looks correct with `wiretap status`:
 
