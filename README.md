@@ -164,7 +164,7 @@ On the Client machine, run Wiretap's `configure` command to generate starting co
 
 Following the example in the diagram:
 ```bash
-./wiretap configure --endpoint 7.1.1.3:1337 --routes 10.0.0.0/24
+./wiretap configure --endpoint 7.3.3.1:1337 --routes 10.0.0.0/24
 ```
 
 ---
@@ -208,8 +208,8 @@ Endpoint = 172.17.0.2:51821
 server config: wiretap_server.conf
 
 server command:
-POSIX Shell:  WIRETAP_RELAY_INTERFACE_PRIVATEKEY=WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y= WIRETAP_RELAY_INTERFACE_PORT=51820 WIRETAP_RELAY_PEER_PUBLICKEY=Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc= WIRETAP_RELAY_PEER_ENDPOINT=7.1.1.3:1337 WIRETAP_E2EE_INTERFACE_PRIVATEKEY=GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg= WIRETAP_E2EE_PEER_PUBLICKEY=cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM= WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve
- PowerShell:  $env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y="; $env:WIRETAP_RELAY_INTERFACE_PORT="51820"; $env:WIRETAP_RELAY_PEER_PUBLICKEY="Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc="; $env:WIRETAP_RELAY_PEER_ENDPOINT="7.1.1.3:1337"; $env:WIRETAP_E2EE_INTERFACE_PRIVATEKEY="GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg="; $env:WIRETAP_E2EE_PEER_PUBLICKEY="cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM="; $env:WIRETAP_E2EE_PEER_ENDPOINT="172.16.0.1:51821"; .\wiretap.exe serve
+POSIX Shell:  WIRETAP_RELAY_INTERFACE_PRIVATEKEY=WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y= WIRETAP_RELAY_INTERFACE_PORT=51820 WIRETAP_RELAY_PEER_PUBLICKEY=Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc= WIRETAP_RELAY_PEER_ENDPOINT=7.3.3.1:1337 WIRETAP_E2EE_INTERFACE_PRIVATEKEY=GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg= WIRETAP_E2EE_PEER_PUBLICKEY=cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM= WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve
+ PowerShell:  $env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs+N1Y="; $env:WIRETAP_RELAY_INTERFACE_PORT="51820"; $env:WIRETAP_RELAY_PEER_PUBLICKEY="Ta75SvIb2v2V8EDo6oE2Fvsys/CNlkzW+aPjxdY+Dlc="; $env:WIRETAP_RELAY_PEER_ENDPOINT="7.3.3.1:1337"; $env:WIRETAP_E2EE_INTERFACE_PRIVATEKEY="GKzGBe3qS7JuLp0vMAErBW6lAewvmFowCIbcgwzComg="; $env:WIRETAP_E2EE_PEER_PUBLICKEY="cXddDGWCzd5igux4FDv97XBsyLH0SRPehhTz3E2IXBM="; $env:WIRETAP_E2EE_PEER_ENDPOINT="172.16.0.1:51821"; .\wiretap.exe serve
 Config File:  ./wiretap serve -f wiretap_server.conf
 ```
 </details>
@@ -252,7 +252,7 @@ $env:WIRETAP_RELAY_INTERFACE_PRIVATEKEY="WDH8F6rSUZDyQFfEsRjWLCnapU254qrSAfpGyGs
 
 There are two other ways to pass arguments to the Server:
 1. With the generated Server config file: `-f wiretap_server.conf`
-2. The legacy method of passing command line arguments (`--endpoint 7.1.1.3:1337 ...`). Be aware that this method exposes the arguments to other users on the system. A compromised private key can be used to connect to the Client as a peer and/or decrypt traffic
+2. The legacy method of passing command line arguments (`--endpoint 7.3.3.1:1337 ...`). Be aware that this method exposes the arguments to other users on the system. A compromised private key can be used to connect to the Client as a peer and/or decrypt traffic
 
 > [!NOTE]
 > The wiretap_server.conf file uses a notation unique to Wiretap. It cannot be used to start a server with `wg-quick` or other generic Wireguard tools.
@@ -406,10 +406,10 @@ The `add client` command can be used to share access to the Wiretap network with
 > [!WARNING]
 > All servers must be deployed *before* adding additional clients. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
 
-Adding a new Client is very similar to the other commands. It will generate a `wiretap.conf` and `wiretap_relay.conf` for sharing. Make sure that all of the first-hop Servers (any Server directly attached to the original Client) can reach or be reached by the new Client or else the new Client won't have access to that chain of Servers. Once you get the endpoint information from whoever will be running the new Client (the IP and port they will listen on), run:
+Adding a new Client is very similar to the other commands. It will generate a `wiretapX.conf` and `wiretap_relayX.conf` for sharing, where X is an incrementing number. Make sure that all of the first-hop Servers (any Server directly attached to the original Client) can reach or be reached by the new Client or else the new Client won't have access to that chain of Servers. Once you get the endpoint information from whoever will be running the new Client (the IP and port they will listen on), run:
 
 ```bash
-./wiretap add client --endpoint 7.1.1.4:1337 --port 1337
+./wiretap add client --endpoint 7.3.3.2:1337 --port 1337
 ```
 
 ---
@@ -473,9 +473,7 @@ You can expose a port on the Client to IPs in Wiretap's `routes` list by using t
 ./wiretap expose --local 80 --remote 8080
 ```
 
-Now all existing Wiretap Servers will bind listeners on port 8080/tcp and proxy connections from that port to your local Client machine on port 80/tcp. By default this uses IPv6, so make sure any exposed services listening on the Client support IPv6 as well.
-
-To configure Wiretap to only use IPv4, use the `configure` command's `--disable-ipv6` option.
+Now all existing Wiretap Servers will bind listeners on port 8080/tcp and proxy connections from that port to your local Client machine on port 80/tcp. By default this uses IPv6, so make sure any exposed services listening on the Client support IPv6 as well. To configure Wiretap to only use IPv4, use the `configure` command's `--disable-ipv6` option.
 
 > [!WARNING]
 > If a Wiretap server process exits or dies for any reason it will not remember ports it was previously exposing. You will need to re-expose any ports you configured with this command.
@@ -569,6 +567,20 @@ Finally, run Wiretap on the remote server system, using the forwarded localhost 
 ```bash
 WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRETAP_E2EE_INTERFACE_PRIVATEKEY=<key> WIRETAP_E2EE_PEER_PUBLICKEY=<key> WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve --endpoint localhost:61820
 ```
+
+Alternatively, if SOCAT is available on the Server and Client (or a machine that can be reached by them) you can use that to establish a UDP-over-TCP connection.
+
+On the Server:
+```
+socat udp4-listen:61820,reuseaddr,fork tcp:<wiretap client address>:61820
+```
+
+On the Client:
+```
+socat tcp4-listen:61820,reuseaddr,fork udp:localhost:<client listening port>
+```
+
+Then start the wiretap Server with the `--endpoint localhost:61820` argument.
 
 ## Add Clients To Any Server
 
