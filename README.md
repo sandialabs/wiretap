@@ -577,22 +577,22 @@ WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRE
 
 Clients can be attached to any Server in the network by using the `--server-address <api-address>` argument when running `wiretap add client`. This allows a Client on a different network than the first Client to still gain access to all of the Wiretap network's routes. However, the new Client will not be able to access any Servers that are part of a different chain connected to the first Client.
 
-As an example, consider a new Client (C2) that is added to the second server (S4) in the right branch of a Wiretap network. This new Client will only be able to access routes via the right branch of the network (S3 and S4) and not the left branch (S1 or S2) because the branches are only joined through an existing Client (C1). Clients do not route traffic from other Clients.
+As an example, consider a new Client (C1) that is added to the second server (S3) in the right branch of a Wiretap network. This new Client will only be able to access routes via the right branch of the network (S2 and S3) and not the left branch (S0 or S1) because the branches are only joined through an existing Client (C0). Clients do not route traffic from other Clients.
 
 ```
          ┌──────┐
-         │  C1  │
+         │  C0  │
          └┬────┬┘
           │    │
     ┌─────┴┐  ┌┴─────┐
-    │  S1  │  │  S3  │
+    │  S0  │  │  S2  │
     └──┬───┘  └──┬───┘
        │         │
     ┌──┴───┐  ┌──┴───┐
-    │  S2  │  │  S4  ◄───────┐
+    │  S1  │  │  S3  ◄───────┐
     └──────┘  └──────┘       │
                           ┌──┴───┐
-                          │  C2  │
+                          │  C1  │
                           └──────┘
 ```
 
