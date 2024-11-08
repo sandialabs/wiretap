@@ -21,6 +21,9 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	gtcp "gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	gudp "gvisor.dev/gvisor/pkg/tcpip/transport/udp"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	"gvisor.dev/gvisor/pkg/tcpip"
+	_ "unsafe" //required to use the go:linkname directive
 
 	"wiretap/peer"
 	"wiretap/transport/api"
@@ -63,6 +66,53 @@ type wiretapDefaultConfig struct {
 	keepalive        int
 	mtu              int
 }
+
+type portOrIdentRange struct {
+	start uint16
+	size  uint32
+}
+
+// Same as stack.DNATTarget, except it forwards ALL ports, not just one.
+type DNAT_Target struct {
+	// The new destination address for packets.
+	//
+	// Immutable.
+	Addr tcpip.Address
+
+	// NetworkProtocol is the network protocol the target is used with.
+	//
+	// Immutable.
+	NetworkProtocol tcpip.NetworkProtocolNumber
+}
+
+// Same as stack.DNATTarget.Action(), except it forwards ALL ports, not just one.
+func (rt *DNAT_Target) Action(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, addressEP stack.AddressableEndpoint) (stack.RuleVerdict, int) {
+	// Sanity check.
+	if rt.NetworkProtocol != pkt.NetworkProtocolNumber {
+		panic(fmt.Sprintf(
+			"DNATTarget.Action with NetworkProtocol %d called on packet with NetworkProtocolNumber %d",
+			rt.NetworkProtocol, pkt.NetworkProtocolNumber))
+	}
+
+	switch hook {
+	case stack.Prerouting, stack.Output:
+	case stack.Input, stack.Forward, stack.Postrouting:
+		panic(fmt.Sprintf("%s not supported for DNAT", hook))
+	default:
+		panic(fmt.Sprintf("%s unrecognized", hook))
+	}
+
+	return dnat_Action(pkt, hook, r, rt.Addr)
+}
+
+// Same as the unexported stack.dnatAction(), except it forwards ALL ports by using a large size value, instead of "1".
+func dnat_Action(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, address tcpip.Address) (stack.RuleVerdict, int) {
+	return stack_natAction(pkt, hook, r, portOrIdentRange{start: 0, size: 65536}, address, true /* dnat */)
+}
+
+// Janky unsafe compiler trick to give us access to the unexported stack.natAction() function to make the DNAT stuff work
+//go:linkname stack_natAction gvisor.dev/gvisor/pkg/tcpip/stack.natAction
+func stack_natAction(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, portsOrIdents portOrIdentRange, address tcpip.Address, dnat bool) (stack.RuleVerdict, int)
 
 // Defaults for serve command.
 var serveCmd = serveCmdConfig{
@@ -484,6 +534,53 @@ func (c serveCmdConfig) Run() {
 	}
 	s.SetTransportProtocolHandler(gudp.ProtocolNumber, udp.Handler(udpConfig))
 
+	/*
+	nics := s.NICInfo()
+	for k, v := range nics {
+    fmt.Printf("key %s: %+v \n", k, v)
+	}
+	*/
+
+	// Playiung with IPTables
+	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20230927004350-cbd86285d259/pkg/tcpip/stack
+	ipt := s.IPTables()
+	natTable := ipt.GetTable(stack.NATID, false)
+	/* All 5 seem to be the same (empty)
+	fmt.Println("Numnber of rules: ", len(natTable.Rules))
+	for i := 0; i < len(natTable.Rules); i++ {
+		rule := natTable.Rules[i]
+		//fmt.Println(rule.Filter.InputInterface)
+		fmt.Printf("%+v\n", rule.Filter)
+	}
+	*/
+	//rule := natTable.Rules[0]
+	//fmt.Printf("%+v\n", natTable)
+
+	// https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
+	NetworkProtocolIPv4 := tcpip.NetworkProtocolNumber(2048)
+	//NetworkProtocolIPv6 := tcpip.NetworkProtocolNumber(34525)
+
+	newFilter := EmptyFilter4()
+	newFilter.Dst = tcpip.AddrFromSlice([]byte{192,168,137,137})
+	newFilter.DstMask = tcpip.AddrFromSlice([]byte{255,255,255,255})
+
+	newRule := new(stack.Rule)
+	newRule.Filter = newFilter
+	//fmt.Printf("%+v\n", newRule.Filter)
+
+	//Don't need any additional matching conditions besides the IP filter
+	//newRule.Matchers = []stack.Matcher{testMatcher{}}
+
+	//newRule.Target = &stack.DNATTarget{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), Port: 8000, NetworkProtocol: NetworkProtocolIPv4}
+
+	// gvisor doesn't seem to provide access to the function primitives needed to do DNAT for all ports, so we have to roll our own.
+	newRule.Target = &DNAT_Target{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), NetworkProtocol: NetworkProtocolIPv4}
+
+	// Not totally sure this is the right way to add the prerouting rule, but it seems to work
+	natTable.Rules[stack.Prerouting] = *newRule
+	ipt.ReplaceTable(stack.NATID, natTable, false)
+
+
 	// Make new relay device.
 	devRelay := device.NewDevice(tunRelay, conn.NewDefaultBind(), device.NewLogger(logger, ""))
 	// Configure wireguard.
@@ -534,4 +631,15 @@ func (c serveCmdConfig) Run() {
 	}()
 
 	wg.Wait()
+}
+
+// Borrowing this function from a more recent version of the module
+// EmptyFilter4 returns an initialized IPv4 header filter.
+func EmptyFilter4() stack.IPHeaderFilter {
+	return stack.IPHeaderFilter{
+		Dst:     tcpip.AddrFrom4([4]byte{}),
+		DstMask: tcpip.AddrFrom4([4]byte{}),
+		Src:     tcpip.AddrFrom4([4]byte{}),
+		SrcMask: tcpip.AddrFrom4([4]byte{}),
+	}
 }
