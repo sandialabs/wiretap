@@ -23,7 +23,7 @@ import (
 	gudp "gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip"
-	_ "unsafe" //required to use the go:linkname directive
+	//_ "unsafe" //required to use the go:linkname directive
 
 	"wiretap/peer"
 	"wiretap/transport/api"
@@ -67,6 +67,23 @@ type wiretapDefaultConfig struct {
 	mtu              int
 }
 
+/*
+type testMatcher struct {
+	
+}
+
+func (t testMatcher) Match(hook stack.Hook, packet stack.PacketBufferPtr, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool)  {
+	fmt.Println("Checking for match")
+	if hook == stack.Prerouting {
+		fmt.Println("Match!")
+		return true, false
+	}
+	fmt.Println("No match")
+	return false, false
+}
+*/
+
+/*
 type portOrIdentRange struct {
 	start uint16
 	size  uint32
@@ -107,12 +124,18 @@ func (rt *DNAT_Target) Action(pkt stack.PacketBufferPtr, hook stack.Hook, r *sta
 
 // Same as the unexported stack.dnatAction(), except it forwards ALL ports by using a large size value, instead of "1".
 func dnat_Action(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, address tcpip.Address) (stack.RuleVerdict, int) {
-	return stack_natAction(pkt, hook, r, portOrIdentRange{start: 0, size: 65536}, address, true /* dnat */)
+	//return stack_natAction(pkt, hook, r, portOrIdentRange{start: 0, size: 65536}, address, true)
+	fmt.Println("DNAT_action")
+	return stack_natAction(pkt, hook, r, portOrIdentRange{start: 8000, size: 1}, address, true, false, true)
 }
 
 // Janky unsafe compiler trick to give us access to the unexported stack.natAction() function to make the DNAT stuff work
 //go:linkname stack_natAction gvisor.dev/gvisor/pkg/tcpip/stack.natAction
-func stack_natAction(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, portsOrIdents portOrIdentRange, address tcpip.Address, dnat bool) (stack.RuleVerdict, int)
+func stack_natAction(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, portsOrIdents portOrIdentRange, address tcpip.Address, dnat, changePort, changeAddress bool) (stack.RuleVerdict, int)
+
+//old format
+//func stack_natAction(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, portsOrIdents portOrIdentRange, address tcpip.Address, dnat bool) (stack.RuleVerdict, int)
+*/
 
 // Defaults for serve command.
 var serveCmd = serveCmdConfig{
@@ -574,11 +597,15 @@ func (c serveCmdConfig) Run() {
 	//newRule.Target = &stack.DNATTarget{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), Port: 8000, NetworkProtocol: NetworkProtocolIPv4}
 
 	// gvisor doesn't seem to provide access to the function primitives needed to do DNAT for all ports, so we have to roll our own.
-	newRule.Target = &DNAT_Target{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), NetworkProtocol: NetworkProtocolIPv4}
+	//newRule.Target = &DNAT_Target{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), NetworkProtocol: NetworkProtocolIPv4}
+	
+	//Do address-only DNAT; port remains the same, so all ports are effectively forwarded to localhost
+	newRule.Target = &stack.DNATTarget{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), NetworkProtocol: NetworkProtocolIPv4, ChangeAddress: true, ChangePort: false}
 
 	// Not totally sure this is the right way to add the prerouting rule, but it seems to work
 	natTable.Rules[stack.Prerouting] = *newRule
-	ipt.ReplaceTable(stack.NATID, natTable, false)
+	//ForceReplaceTable ensures IPtables get enabled; ReplaceTable doesn't. 
+	ipt.ForceReplaceTable(stack.NATID, natTable, false)
 
 
 	// Make new relay device.
