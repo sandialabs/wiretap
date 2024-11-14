@@ -23,7 +23,6 @@ import (
 	gudp "gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip"
-	//_ "unsafe" //required to use the go:linkname directive
 
 	"wiretap/peer"
 	"wiretap/transport/api"
@@ -50,6 +49,7 @@ type serveCmdConfig struct {
 	keepaliveCount    uint
 	keepaliveInterval uint
 	disableV6         bool
+	localhostIP       string
 }
 
 type wiretapDefaultConfig struct {
@@ -69,7 +69,7 @@ type wiretapDefaultConfig struct {
 
 /*
 type testMatcher struct {
-	
+
 }
 
 func (t testMatcher) Match(hook stack.Hook, packet stack.PacketBufferPtr, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool)  {
@@ -81,60 +81,6 @@ func (t testMatcher) Match(hook stack.Hook, packet stack.PacketBufferPtr, inputI
 	fmt.Println("No match")
 	return false, false
 }
-*/
-
-/*
-type portOrIdentRange struct {
-	start uint16
-	size  uint32
-}
-
-// Same as stack.DNATTarget, except it forwards ALL ports, not just one.
-type DNAT_Target struct {
-	// The new destination address for packets.
-	//
-	// Immutable.
-	Addr tcpip.Address
-
-	// NetworkProtocol is the network protocol the target is used with.
-	//
-	// Immutable.
-	NetworkProtocol tcpip.NetworkProtocolNumber
-}
-
-// Same as stack.DNATTarget.Action(), except it forwards ALL ports, not just one.
-func (rt *DNAT_Target) Action(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, addressEP stack.AddressableEndpoint) (stack.RuleVerdict, int) {
-	// Sanity check.
-	if rt.NetworkProtocol != pkt.NetworkProtocolNumber {
-		panic(fmt.Sprintf(
-			"DNATTarget.Action with NetworkProtocol %d called on packet with NetworkProtocolNumber %d",
-			rt.NetworkProtocol, pkt.NetworkProtocolNumber))
-	}
-
-	switch hook {
-	case stack.Prerouting, stack.Output:
-	case stack.Input, stack.Forward, stack.Postrouting:
-		panic(fmt.Sprintf("%s not supported for DNAT", hook))
-	default:
-		panic(fmt.Sprintf("%s unrecognized", hook))
-	}
-
-	return dnat_Action(pkt, hook, r, rt.Addr)
-}
-
-// Same as the unexported stack.dnatAction(), except it forwards ALL ports by using a large size value, instead of "1".
-func dnat_Action(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, address tcpip.Address) (stack.RuleVerdict, int) {
-	//return stack_natAction(pkt, hook, r, portOrIdentRange{start: 0, size: 65536}, address, true)
-	fmt.Println("DNAT_action")
-	return stack_natAction(pkt, hook, r, portOrIdentRange{start: 8000, size: 1}, address, true, false, true)
-}
-
-// Janky unsafe compiler trick to give us access to the unexported stack.natAction() function to make the DNAT stuff work
-//go:linkname stack_natAction gvisor.dev/gvisor/pkg/tcpip/stack.natAction
-func stack_natAction(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, portsOrIdents portOrIdentRange, address tcpip.Address, dnat, changePort, changeAddress bool) (stack.RuleVerdict, int)
-
-//old format
-//func stack_natAction(pkt stack.PacketBufferPtr, hook stack.Hook, r *stack.Route, portsOrIdents portOrIdentRange, address tcpip.Address, dnat bool) (stack.RuleVerdict, int)
 */
 
 // Defaults for serve command.
@@ -155,6 +101,7 @@ var serveCmd = serveCmdConfig{
 	keepaliveCount:    3,
 	keepaliveInterval: 60,
 	disableV6:         false,
+	localhostIP:       "",
 }
 
 var wiretapDefault = wiretapDefaultConfig{
@@ -197,6 +144,7 @@ func init() {
 	cmd.Flags().BoolVarP(&serveCmd.disableV6, "disable-ipv6", "", serveCmd.disableV6, "disable ipv6")
 	cmd.Flags().BoolVarP(&serveCmd.logging, "log", "l", serveCmd.logging, "enable logging to file")
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
+	cmd.Flags().StringVarP(&serveCmd.localhostIP, "localhost-ip", "i", serveCmd.localhostIP, "redirect wiretap packets destined for this IPv4 address to server's localhost")
 	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
 	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
 	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
@@ -216,6 +164,9 @@ func init() {
 	check("error binding flag to viper", err)
 
 	err = viper.BindPFlag("disableipv6", cmd.Flags().Lookup("disable-ipv6"))
+	check("error binding flag to viper", err)
+
+	err = viper.BindPFlag("localhost-ip", cmd.Flags().Lookup("localhost-ip"))
 	check("error binding flag to viper", err)
 
 	// Quiet and debug flags must be used independently.
@@ -557,56 +508,41 @@ func (c serveCmdConfig) Run() {
 	}
 	s.SetTransportProtocolHandler(gudp.ProtocolNumber, udp.Handler(udpConfig))
 
-	/*
-	nics := s.NICInfo()
-	for k, v := range nics {
-    fmt.Printf("key %s: %+v \n", k, v)
+	// Setup localhost forwarding IP using IPTables
+	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20231115214215-71bcc96c6e38/pkg/tcpip/stack
+	if viper.IsSet("localhost-ip") && viper.GetString("localhost-ip") != "" {
+		localhostAddr, err := netip.ParseAddr(viper.GetString("localhost-ip"))
+		check("failed to parse localhost-ip address", err)
+
+		// Setup IP filter for localhost re-routing
+		newFilter := stack.EmptyFilter4()
+		newFilter.Dst = tcpip.AddrFromSlice(localhostAddr.AsSlice())
+		newFilter.DstMask = tcpip.AddrFromSlice([]byte{255,255,255,255})
+
+		newRule := new(stack.Rule)
+		newRule.Filter = newFilter
+
+		// https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
+		NetworkProtocolIPv4 := tcpip.NetworkProtocolNumber(2048)
+		//NetworkProtocolIPv6 := tcpip.NetworkProtocolNumber(34525)
+
+		//Do address-only DNAT; port remains the same, so all ports are effectively forwarded to localhost
+		newRule.Target = &stack.DNATTarget{
+			Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}),
+			NetworkProtocol: NetworkProtocolIPv4,
+			ChangeAddress: true,
+			ChangePort: false,
+		}
+
+		// Get the current (blank) IPTables and add the new rule to it
+		ipt := s.IPTables()
+		natTable := ipt.GetTable(stack.NATID, false)
+		// Not 100% sure this is the right way to add the prerouting rule, but it seems to work
+		natTable.Rules[stack.Prerouting] = *newRule
+
+		//ForceReplaceTable ensures IPtables get enabled; ReplaceTable doesn't.
+		ipt.ForceReplaceTable(stack.NATID, natTable, false)
 	}
-	*/
-
-	// Playiung with IPTables
-	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20230927004350-cbd86285d259/pkg/tcpip/stack
-	ipt := s.IPTables()
-	natTable := ipt.GetTable(stack.NATID, false)
-	/* All 5 seem to be the same (empty)
-	fmt.Println("Numnber of rules: ", len(natTable.Rules))
-	for i := 0; i < len(natTable.Rules); i++ {
-		rule := natTable.Rules[i]
-		//fmt.Println(rule.Filter.InputInterface)
-		fmt.Printf("%+v\n", rule.Filter)
-	}
-	*/
-	//rule := natTable.Rules[0]
-	//fmt.Printf("%+v\n", natTable)
-
-	// https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
-	NetworkProtocolIPv4 := tcpip.NetworkProtocolNumber(2048)
-	//NetworkProtocolIPv6 := tcpip.NetworkProtocolNumber(34525)
-
-	newFilter := EmptyFilter4()
-	newFilter.Dst = tcpip.AddrFromSlice([]byte{192,168,137,137})
-	newFilter.DstMask = tcpip.AddrFromSlice([]byte{255,255,255,255})
-
-	newRule := new(stack.Rule)
-	newRule.Filter = newFilter
-	//fmt.Printf("%+v\n", newRule.Filter)
-
-	//Don't need any additional matching conditions besides the IP filter
-	//newRule.Matchers = []stack.Matcher{testMatcher{}}
-
-	//newRule.Target = &stack.DNATTarget{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), Port: 8000, NetworkProtocol: NetworkProtocolIPv4}
-
-	// gvisor doesn't seem to provide access to the function primitives needed to do DNAT for all ports, so we have to roll our own.
-	//newRule.Target = &DNAT_Target{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), NetworkProtocol: NetworkProtocolIPv4}
-	
-	//Do address-only DNAT; port remains the same, so all ports are effectively forwarded to localhost
-	newRule.Target = &stack.DNATTarget{Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}), NetworkProtocol: NetworkProtocolIPv4, ChangeAddress: true, ChangePort: false}
-
-	// Not totally sure this is the right way to add the prerouting rule, but it seems to work
-	natTable.Rules[stack.Prerouting] = *newRule
-	//ForceReplaceTable ensures IPtables get enabled; ReplaceTable doesn't. 
-	ipt.ForceReplaceTable(stack.NATID, natTable, false)
-
 
 	// Make new relay device.
 	devRelay := device.NewDevice(tunRelay, conn.NewDefaultBind(), device.NewLogger(logger, ""))
@@ -658,15 +594,4 @@ func (c serveCmdConfig) Run() {
 	}()
 
 	wg.Wait()
-}
-
-// Borrowing this function from a more recent version of the module
-// EmptyFilter4 returns an initialized IPv4 header filter.
-func EmptyFilter4() stack.IPHeaderFilter {
-	return stack.IPHeaderFilter{
-		Dst:     tcpip.AddrFrom4([4]byte{}),
-		DstMask: tcpip.AddrFrom4([4]byte{}),
-		Src:     tcpip.AddrFrom4([4]byte{}),
-		SrcMask: tcpip.AddrFrom4([4]byte{}),
-	}
 }
