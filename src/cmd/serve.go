@@ -17,12 +17,12 @@ import (
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/tun/netstack"
+	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	gtcp "gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	gudp "gvisor.dev/gvisor/pkg/tcpip/transport/udp"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
-	"gvisor.dev/gvisor/pkg/tcpip"
 
 	"wiretap/peer"
 	"wiretap/transport/api"
@@ -166,7 +166,7 @@ func init() {
 	err = viper.BindPFlag("disableipv6", cmd.Flags().Lookup("disable-ipv6"))
 	check("error binding flag to viper", err)
 
-	err = viper.BindPFlag("localhost-ip", cmd.Flags().Lookup("localhost-ip"))
+	err = viper.BindPFlag("Relay.Interface.LocalhostIP", cmd.Flags().Lookup("localhost-ip"))
 	check("error binding flag to viper", err)
 
 	// Quiet and debug flags must be used independently.
@@ -510,14 +510,15 @@ func (c serveCmdConfig) Run() {
 
 	// Setup localhost forwarding IP using IPTables
 	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20231115214215-71bcc96c6e38/pkg/tcpip/stack
-	if viper.IsSet("localhost-ip") && viper.GetString("localhost-ip") != "" {
-		localhostAddr, err := netip.ParseAddr(viper.GetString("localhost-ip"))
+	//if viper.IsSet("localhostip") && viper.GetString("localhostip") != "" {
+	if viper.IsSet("Relay.Interface.LocalhostIP") && viper.GetString("Relay.Interface.LocalhostIP") != "" {
+		localhostAddr, err := netip.ParseAddr(viper.GetString("Relay.Interface.LocalhostIP"))
 		check("failed to parse localhost-ip address", err)
 
 		// Setup IP filter for localhost re-routing
 		newFilter := stack.EmptyFilter4()
 		newFilter.Dst = tcpip.AddrFromSlice(localhostAddr.AsSlice())
-		newFilter.DstMask = tcpip.AddrFromSlice([]byte{255,255,255,255})
+		newFilter.DstMask = tcpip.AddrFromSlice([]byte{255, 255, 255, 255})
 
 		newRule := new(stack.Rule)
 		newRule.Filter = newFilter
@@ -528,10 +529,10 @@ func (c serveCmdConfig) Run() {
 
 		//Do address-only DNAT; port remains the same, so all ports are effectively forwarded to localhost
 		newRule.Target = &stack.DNATTarget{
-			Addr: tcpip.AddrFromSlice([]byte{127,0,0,1}),
+			Addr:            tcpip.AddrFromSlice([]byte{127, 0, 0, 1}),
 			NetworkProtocol: NetworkProtocolIPv4,
-			ChangeAddress: true,
-			ChangePort: false,
+			ChangeAddress:   true,
+			ChangePort:      false,
 		}
 
 		// Get the current (blank) IPTables and add the new rule to it
@@ -542,6 +543,19 @@ func (c serveCmdConfig) Run() {
 
 		//ForceReplaceTable ensures IPtables get enabled; ReplaceTable doesn't.
 		ipt.ForceReplaceTable(stack.NATID, natTable, false)
+
+		if localhostAddr.IsLoopback() {
+			fmt.Printf("=== WARNING: %s is a loopback IP. It will probably not work for Localhost Forwarding ===\n", localhostAddr.String())
+
+		} else if localhostAddr.IsMulticast() {
+			fmt.Printf("=== WARNING: %s is a Multicast IP. Your OS might still send extra packets to other IPs when you target this IP ===\n", localhostAddr.String())
+
+		} else if !localhostAddr.IsPrivate() {
+			fmt.Printf("=== WARNING: %s is a public IP. If Localhost Forwarding fails, your traffic may actually touch that IP ===\n", localhostAddr.String())
+		}
+
+		fmt.Println("Localhost Forwarding configured for ", localhostAddr)
+		fmt.Println()
 	}
 
 	// Make new relay device.
