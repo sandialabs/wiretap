@@ -67,22 +67,6 @@ type wiretapDefaultConfig struct {
 	mtu              int
 }
 
-/*
-type testMatcher struct {
-
-}
-
-func (t testMatcher) Match(hook stack.Hook, packet stack.PacketBufferPtr, inputInterfaceName, outputInterfaceName string) (matches bool, hotdrop bool)  {
-	fmt.Println("Checking for match")
-	if hook == stack.Prerouting {
-		fmt.Println("Match!")
-		return true, false
-	}
-	fmt.Println("No match")
-	return false, false
-}
-*/
-
 // Defaults for serve command.
 var serveCmd = serveCmdConfig{
 	configFile:        "",
@@ -144,7 +128,7 @@ func init() {
 	cmd.Flags().BoolVarP(&serveCmd.disableV6, "disable-ipv6", "", serveCmd.disableV6, "disable ipv6")
 	cmd.Flags().BoolVarP(&serveCmd.logging, "log", "l", serveCmd.logging, "enable logging to file")
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
-	cmd.Flags().StringVarP(&serveCmd.localhostIP, "localhost-ip", "i", serveCmd.localhostIP, "redirect wiretap packets destined for this IPv4 address to server's localhost")
+	cmd.Flags().StringVarP(&serveCmd.localhostIP, "localhost-ip", "i", serveCmd.localhostIP, "[EXPERIMENTAL] redirect Wiretap packets destined for this IPv4 address to server's localhost")
 	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
 	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
 	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
@@ -510,7 +494,6 @@ func (c serveCmdConfig) Run() {
 
 	// Setup localhost forwarding IP using IPTables
 	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20231115214215-71bcc96c6e38/pkg/tcpip/stack
-	//if viper.IsSet("localhostip") && viper.GetString("localhostip") != "" {
 	if viper.IsSet("Relay.Interface.LocalhostIP") && viper.GetString("Relay.Interface.LocalhostIP") != "" {
 		localhostAddr, err := netip.ParseAddr(viper.GetString("Relay.Interface.LocalhostIP"))
 		check("failed to parse localhost-ip address", err)
@@ -525,7 +508,6 @@ func (c serveCmdConfig) Run() {
 
 		// https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
 		NetworkProtocolIPv4 := tcpip.NetworkProtocolNumber(2048)
-		//NetworkProtocolIPv6 := tcpip.NetworkProtocolNumber(34525)
 
 		//Do address-only DNAT; port remains the same, so all ports are effectively forwarded to localhost
 		newRule.Target = &stack.DNATTarget{
@@ -540,6 +522,43 @@ func (c serveCmdConfig) Run() {
 		natTable := ipt.GetTable(stack.NATID, false)
 		// Not 100% sure this is the right way to add the prerouting rule, but it seems to work
 		natTable.Rules[stack.Prerouting] = *newRule
+
+		/* Example of how to add another rule to a chain
+		// Setup IPv6 filter for localhost re-routing
+		i6Filter := stack.EmptyFilter4()
+		i6Filter.Dst = tcpip.AddrFromSlice([]byte{0xfd, 0x90, 0x13, 0x37, 0x13, 0x37, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
+		fmt.Println(i6Filter.Dst.String())
+		i6Filter.DstMask = tcpip.AddrFromSlice([]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255})
+
+		i6Rule := new(stack.Rule)
+		i6Rule.Filter = i6Filter
+
+		NetworkProtocolIPv6 := tcpip.NetworkProtocolNumber(34525)
+		// This fails because apparently routing to ::1 isn't allowed. https://serverfault.com/questions/1122125/why-does-ip6tables-lose-packets-after-prerouting-to-a-different-interface
+		i6Rule.Target = &stack.DNATTarget{
+			//Addr:            tcpip.AddrFromSlice([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}),
+			Addr:            tcpip.AddrFromSlice([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1}),
+			NetworkProtocol: NetworkProtocolIPv6,
+			ChangeAddress:   true,
+			ChangePort:      false,
+		}
+
+		//Add the IPv6 rule, and fix up the associated chains and underflows
+		natTable.Rules = slices.Insert(natTable.Rules, int(stack.Prerouting)+1, *i6Rule)
+
+		for hook, ruleIndex := range natTable.BuiltinChains {
+			if hook != int(stack.Prerouting) && ruleIndex > 0 {
+				natTable.BuiltinChains[hook] = ruleIndex + 1
+			}
+		}
+		for hook, ruleIndex := range natTable.Underflows {
+			if hook != int(stack.Prerouting) && ruleIndex > 0 {
+				natTable.Underflows[hook] = ruleIndex + 1
+			}
+		}
+
+		fmt.Printf("%+v\n", natTable)
+		*/
 
 		//ForceReplaceTable ensures IPtables get enabled; ReplaceTable doesn't.
 		ipt.ForceReplaceTable(stack.NATID, natTable, false)
