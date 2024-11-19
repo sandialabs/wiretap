@@ -36,6 +36,7 @@ In this diagram, the Client has generated and installed WireGuard configuration 
 - [Features](#features)
 - [Demo](#demo)
 - [Experimental](#experimental)
+	- [Localhost Server Access](#localhost-server-access)
 	- [TCP Tunneling](#tcp-tunneling)
 	- [Add Clients To Any Server](#add-clients-to-any-server)
 
@@ -543,17 +544,24 @@ Please see the [Demo page in the Wiki](https://github.com/sandialabs/wiretap/wik
 
 Sometimes you want to access many ports on the Server itself that are listening on the localhost/loopback interface instead of a public interface. Rather than setting up many individual port forwards, you can use Wiretap's "localhost IP" redirection feature. 
 
-When running the `configure` or `add server` commands, you can specify a `--localhost-ip <IPv4 address>` argument. Any packets received by this Server through the Wiretap network with this target destination address will be rerouted to the Server host's `127.0.0.1` loopback address instead, with replies routed back to the client appropriately. 
+When running the `configure` or `add server` commands, you can specify a `--localhost-ip <IPv4 address>` argument. For example:
+```bash
+./wiretap configure --endpoint 7.3.3.1:1337 --routes 10.0.0.0/24 -i 192.168.137.137
+```
+Any packets received by this Server through the Wiretap network with this target destination address (`192.168.137.137` in this example) will be rerouted to the Server host's `127.0.0.1` loopback address instead, with replies routed back to the Client appropriately. 
 
 > [!CAUTION]
 > It is **strongly** recommended that you specify a private (non-routable) IP address to use for this option, preferably one that you know is not in use in the target network. This feature has only been lightly tested, so if the re-routing fails unexpectedly you want to ensure your traffic will go to a "safe" destination. For similar reasons you should not specify a broadcast address, or IPs that your Client already has routes for. 
 
-Under the hood, this argument is roughly equivalent to adding this `iptables` rule to Wiretap's userspace networking stack on the Server:
+Under the hood, this feature is roughly equivalent to adding this `iptables` rule to Wiretap's userspace networking stack on the Server:
 ```
 iptables -t nat -A PREROUTING -p tcp -d <IPv4 address> -j DNAT --to-destination 127.0.0.1
 ```
 
-Currently this only works for TCP connections, and only for an IPv4 target address. Unfortunately there's [not a clean way](https://serverfault.com/a/975890) to do NAT to the IPv6 `::1` loopback address, so this feature can't be used to access services listening exclusively on that IPv6 address. 
+Limitations:
+- Currently this only works for TCP connections, and only for an IPv4 target address. 
+	- Unfortunately there's [not a clean way](https://serverfault.com/a/975890) to do NAT to the IPv6 `::1` loopback address, so this feature can't be used to access services listening exclusively on that IPv6 address. 
+- This feature does not provide access to other IPs in the 127.0.0.0/8 space. 
 
 
 ## TCP Tunneling
