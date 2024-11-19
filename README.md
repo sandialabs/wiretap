@@ -86,7 +86,7 @@ See the [Usage section](#Usage) for more details.
 
 No installation of Wiretap is required. Just grab a binary from the [releases](https://github.com/sandialabs/wiretap/releases) page. You may need two different binaries if the OS/ARCH are different on the client and server machines.
 
-If you want to compile it yourself or can't find the OS/ARCH you're looking for, install Go (>=1.20) from https://go.dev/dl/ and use the provided [Makefile](./src/Makefile).
+If you want to compile it yourself or can't find the OS/ARCH you're looking for, install Go (>=1.23.3) from https://go.dev/dl/ and use the provided [Makefile](./src/Makefile).
 
 # How it Works
 
