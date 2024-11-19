@@ -28,7 +28,11 @@ type request struct {
 
 // MakeRequest attempts to send an API query to the Wiretap server.
 func makeRequest(req request) ([]byte, error) {
-	client := &http.Client{Timeout: 3 * time.Second}
+	// Never use a proxy for API requests, they must go direct through the Wiretap network
+	tr := &http.Transport{
+		Proxy: nil,
+	}
+	client := &http.Client{Timeout: 3 * time.Second, Transport: tr}
 	reqBody := bytes.NewBuffer(req.Body)
 
 	r, err := http.NewRequest(req.Method, req.URL, reqBody)
