@@ -26,6 +26,7 @@ type addServerCmdConfig struct {
 	writeToClipboard bool
 	port             int
 	nickname         string
+	localhostIP      string
 }
 
 var addServerCmdArgs = addServerCmdConfig{
@@ -37,6 +38,7 @@ var addServerCmdArgs = addServerCmdConfig{
 	writeToClipboard: false,
 	port:             USE_ENDPOINT_PORT,
 	nickname:         "",
+	localhostIP:      "",
 }
 
 // addServerCmd represents the server command.
@@ -56,8 +58,9 @@ func init() {
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.serverAddress, "server-address", "s", addServerCmdArgs.serverAddress, "API address of server that new server will connect to, connects to client by default")
 	addServerCmd.Flags().IntVarP(&addServerCmdArgs.port, "port", "p", addServerCmdArgs.port, "listener port to start on new server for wireguard relay. If --outbound, default is the port specified in --endpoint; otherwise default is 51820")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.nickname, "nickname", "n", addServerCmdArgs.nickname, "Server nickname to display in 'status' command")
+	addServerCmd.Flags().StringVarP(&addServerCmdArgs.localhostIP, "localhost-ip", "i", addServerCmdArgs.localhostIP, "[EXPERIMENTAL] Redirect wiretap packets destined for this IPv4 address to server's localhost")
 	addServerCmd.Flags().BoolVarP(&addServerCmdArgs.writeToClipboard, "clipboard", "c", addServerCmdArgs.writeToClipboard, "copy configuration args to clipboard")
-	
+
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileRelay, "relay-input", "", addServerCmdArgs.configFileRelay, "filename of input relay config file")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileE2EE, "e2ee-input", "", addServerCmdArgs.configFileE2EE, "filename of input E2EE config file")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.configFileServer, "server-output", "", addServerCmdArgs.configFileServer, "filename of server config output file")
@@ -67,7 +70,7 @@ func init() {
 
 	addServerCmd.Flags().SortFlags = false
 	addServerCmd.PersistentFlags().SortFlags = false
-	
+
 	helpFunc := addCmd.HelpFunc()
 	addCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
@@ -83,7 +86,7 @@ func init() {
 					} else {
 						fmt.Printf("Failed to hide flag %v: %v\n", f, err)
 					}
-					
+
 				}
 			}
 		}
@@ -170,7 +173,7 @@ func (c addServerCmdConfig) Run() {
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
 			Endpoint:   net.JoinHostPort(newRelayPrefixes[0].Addr().Next().Next().String(), fmt.Sprint(E2EEPort)),
-			Nickname: c.nickname,
+			Nickname:   c.nickname,
 		})
 		check("failed to generate new e2ee peer", err)
 		clientConfigE2EE.AddPeer(serverE2EEPeer)
@@ -264,7 +267,7 @@ func (c addServerCmdConfig) Run() {
 			PublicKey:  serverConfigE2EE.GetPublicKey(),
 			AllowedIPs: c.allowedIPs,
 			Endpoint:   net.JoinHostPort(addresses.NextServerRelayAddr4.String(), fmt.Sprint(E2EEPort)),
-			Nickname: c.nickname,
+			Nickname:   c.nickname,
 		})
 		check("failed to parse server as peer", err)
 		clientConfigE2EE.AddPeer(serverPeerConfigE2EE)
@@ -336,19 +339,23 @@ func (c addServerCmdConfig) Run() {
 		// Leaf server is the relay peer for the new server.
 		clientConfigRelay = leafServerConfigRelay
 	}
-	
+
 	// Set port defaults
 	if c.port == USE_ENDPOINT_PORT {
 		if addArgs.outbound { //for outbound, default port is same as endpoint port
 			c.port = portFromEndpoint(addArgs.endpoint)
-			
+
 		} else { //for inbound, use a reasonable default for server relay listening port
-			c.port = Port;
+			c.port = Port
 		}
 	}
-	
+
 	err = serverConfigRelay.SetPort(c.port)
 	check("failed to set port", err)
+
+	// Setup localhost IP relay
+	err = serverConfigRelay.SetLocalhostIP(c.localhostIP)
+	check("failed to set localhost IP", err)
 
 	// Overwrite Relay file with new server peer if adding a server directly to the client.
 	var fileStatusRelay string
