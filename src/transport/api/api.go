@@ -58,6 +58,15 @@ type NetworkState struct {
 	ServerRelaySubnet6   netip.Addr
 }
 
+type HostInterface struct {
+	Name  string
+	Addrs []net.IPNet
+}
+
+type HostInterfaces struct {
+	Interfaces []HostInterface
+}
+
 type AddAllowedIPsRequest struct {
 	PublicKey  wgtypes.Key
 	AllowedIPs []net.IPNet
@@ -129,6 +138,7 @@ func Handle(tnet *netstack.Net, devRelay *device.Device, devE2EE *device.Device,
 
 	http.HandleFunc("/ping", wrapApi(handlePing()))
 	http.HandleFunc("/serverinfo", wrapApi(handleServerInfo(configs)))
+	http.HandleFunc("/serverinterfaces", wrapApi(handleServerInterfaces()))
 	http.HandleFunc("/addpeer", wrapApi(handleAddPeer(devRelay, devE2EE, configs)))
 	http.HandleFunc("/allocate", wrapApi(handleAllocate(ns)))
 	http.HandleFunc("/addallowedips", wrapApi(handleAddAllowedIPs(devRelay, configs)))
@@ -177,6 +187,53 @@ func handleServerInfo(configs ServerConfigs) http.HandlerFunc {
 		}
 
 		body, err := json.Marshal(configs)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+
+		_, err = w.Write(body)
+		if err != nil {
+			log.Printf("API Error: %v", err)
+		}
+	}
+}
+
+// handleServerInterfaces responds with network interface information for this server.
+func handleServerInterfaces() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		interfaces := HostInterfaces{}
+		ifs, err := net.Interfaces()
+		if err != nil {
+			log.Printf("API Error: %v", err)
+		}
+
+		for _, ifx := range ifs {
+			newIF := HostInterface{}
+			newIF.Name = ifx.Name
+
+			addrs, err := ifx.Addrs()
+			if err != nil {
+				log.Printf("API Error: %v", err)
+			}
+
+			for _, a := range addrs {
+				_, cidr, err := net.ParseCIDR(a.String())
+				if err != nil {
+					log.Printf("API Error: %v", err)
+				}
+				newIF.Addrs = append(newIF.Addrs, *cidr)
+			}
+
+			interfaces.Interfaces = append(interfaces.Interfaces, newIF)
+		}
+
+		body, err := json.Marshal(interfaces)
 		if err != nil {
 			writeErr(w, err)
 			return

@@ -89,6 +89,30 @@ func ServerInfo(apiAddr netip.AddrPort) (peer.Config, peer.Config, error) {
 	return *configs.RelayConfig, *configs.E2EEConfig, nil
 }
 
+func ServerInterfaces(apiAddr netip.AddrPort) (serverapi.HostInterfaces, error) {
+	//Generate a placeholder interface list to display the error later
+	emptyResponse := serverapi.HostInterfaces{}
+	emptyResponse.Interfaces = []serverapi.HostInterface{serverapi.HostInterface{
+		Name: "",
+	}}
+
+	body, err := makeRequest(request{
+		URL:    makeUrl(apiAddr, "serverinterfaces", []string{}),
+		Method: "GET",
+	})
+	if err != nil {
+		return emptyResponse, err
+	}
+
+	var interfaces serverapi.HostInterfaces
+	err = json.Unmarshal(body, &interfaces)
+	if err != nil {
+		return emptyResponse, err
+	}
+
+	return interfaces, nil
+}
+
 func AllocateNode(apiAddr netip.AddrPort, peerType peer.PeerType) (serverapi.NetworkState, error) {
 	body, err := makeRequest(request{
 		URL:    makeUrl(apiAddr, "allocate", []string{fmt.Sprintf("type=%d", peerType)}),
