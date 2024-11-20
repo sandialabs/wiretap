@@ -26,6 +26,9 @@ type request struct {
 	Body   []byte
 }
 
+// Re-export the server api struct so files importing this package can access it
+type HostInterface serverapi.HostInterface
+
 // MakeRequest attempts to send an API query to the Wiretap server.
 func makeRequest(req request) ([]byte, error) {
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -89,25 +92,19 @@ func ServerInfo(apiAddr netip.AddrPort) (peer.Config, peer.Config, error) {
 	return *configs.RelayConfig, *configs.E2EEConfig, nil
 }
 
-func ServerInterfaces(apiAddr netip.AddrPort) (serverapi.HostInterfaces, error) {
-	//Generate a placeholder interface list to display the error later
-	emptyResponse := serverapi.HostInterfaces{}
-	emptyResponse.Interfaces = []serverapi.HostInterface{serverapi.HostInterface{
-		Name: "",
-	}}
-
+func ServerInterfaces(apiAddr netip.AddrPort) ([]HostInterface, error) {
 	body, err := makeRequest(request{
 		URL:    makeUrl(apiAddr, "serverinterfaces", []string{}),
 		Method: "GET",
 	})
 	if err != nil {
-		return emptyResponse, err
+		return nil, err
 	}
 
-	var interfaces serverapi.HostInterfaces
+	var interfaces []HostInterface
 	err = json.Unmarshal(body, &interfaces)
 	if err != nil {
-		return emptyResponse, err
+		return nil, err
 	}
 
 	return interfaces, nil

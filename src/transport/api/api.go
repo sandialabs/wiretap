@@ -63,10 +63,6 @@ type HostInterface struct {
 	Addrs []net.IPNet
 }
 
-type HostInterfaces struct {
-	Interfaces []HostInterface
-}
-
 type AddAllowedIPsRequest struct {
 	PublicKey  wgtypes.Key
 	AllowedIPs []net.IPNet
@@ -207,7 +203,7 @@ func handleServerInterfaces() http.HandlerFunc {
 			return
 		}
 
-		interfaces := HostInterfaces{}
+		var interfaces []HostInterface
 		ifs, err := net.Interfaces()
 		if err != nil {
 			log.Printf("API Error: %v", err)
@@ -230,7 +226,7 @@ func handleServerInterfaces() http.HandlerFunc {
 				newIF.Addrs = append(newIF.Addrs, *cidr)
 			}
 
-			interfaces.Interfaces = append(interfaces.Interfaces, newIF)
+			interfaces = append(interfaces, newIF)
 		}
 
 		body, err := json.Marshal(interfaces)
@@ -378,7 +374,7 @@ func handleAllocate(ns *NetworkState) http.HandlerFunc {
 	}
 }
 
-// handleAddAllowedIPs adds new route to a specfied peer.
+// handleAddAllowedIPs adds new route to a specified peer.
 func handleAddAllowedIPs(devRelay *device.Device, config ServerConfigs) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {

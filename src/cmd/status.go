@@ -11,7 +11,6 @@ import (
 
 	"wiretap/api"
 	"wiretap/peer"
-	serverapi "wiretap/transport/api"
 )
 
 type statusCmdConfig struct {
@@ -57,7 +56,7 @@ func (cc statusCmdConfig) Run() {
 		relayConfig peer.Config
 		e2eeConfig  peer.Config
 		children    []*Node
-		networkInfo serverapi.HostInterfaces
+		interfaces  []api.HostInterface
 		error       string
 	}
 
@@ -91,11 +90,13 @@ func (cc statusCmdConfig) Run() {
 			})
 
 		} else {
-			interfaces := serverapi.HostInterfaces{}
+			var interfaces []api.HostInterface
 			if cc.networkInfo {
 				interfaces, err = api.ServerInterfaces(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
 				if err != nil {
-					interfaces.Interfaces[0].Name = "ERROR"
+					interfaces = append(interfaces, api.HostInterface{
+						Name: "ERROR: " + err.Error(),
+					})
 				}
 			}
 
@@ -103,7 +104,7 @@ func (cc statusCmdConfig) Run() {
 				peerConfig:  ep,
 				relayConfig: relayConfig,
 				e2eeConfig:  e2eeConfig,
-				networkInfo: interfaces,
+				interfaces: interfaces,
 			}
 		}
 	}
@@ -173,7 +174,7 @@ func (cc statusCmdConfig) Run() {
 Network Interfaces:
 -------------------
 `
-				for _, ifx := range c.networkInfo.Interfaces {
+				for _, ifx := range c.interfaces {
 					nodeString += fmt.Sprintf("%v:\n", ifx.Name)
 					for _, a := range ifx.Addrs {
 						nodeString += strings.Repeat(" ", 2) + a.String() + "\n"
