@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"slices"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -493,75 +494,14 @@ func (c serveCmdConfig) Run() {
 	s.SetTransportProtocolHandler(gudp.ProtocolNumber, udp.Handler(udpConfig))
 
 	// Setup localhost forwarding IP using IPTables
-	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20231115214215-71bcc96c6e38/pkg/tcpip/stack
 	if viper.IsSet("Relay.Interface.LocalhostIP") && viper.GetString("Relay.Interface.LocalhostIP") != "" {
 		localhostAddr, err := netip.ParseAddr(viper.GetString("Relay.Interface.LocalhostIP"))
 		check("failed to parse localhost-ip address", err)
-
-		// Setup IP filter for localhost re-routing
-		newFilter := stack.EmptyFilter4()
-		newFilter.Dst = tcpip.AddrFromSlice(localhostAddr.AsSlice())
-		newFilter.DstMask = tcpip.AddrFromSlice([]byte{255, 255, 255, 255})
-
-		newRule := new(stack.Rule)
-		newRule.Filter = newFilter
-
-		// https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
-		NetworkProtocolIPv4 := tcpip.NetworkProtocolNumber(2048)
-
-		//Do address-only DNAT; port remains the same, so all ports are effectively forwarded to localhost
-		newRule.Target = &stack.DNATTarget{
-			Addr:            tcpip.AddrFromSlice([]byte{127, 0, 0, 1}),
-			NetworkProtocol: NetworkProtocolIPv4,
-			ChangeAddress:   true,
-			ChangePort:      false,
+		if len(localhostAddr.AsSlice()) != 4 {
+			log.Fatalf("Localhost IP must be an IPv4 address")
 		}
 
-		// Get the current (blank) IPTables and add the new rule to it
-		ipt := s.IPTables()
-		natTable := ipt.GetTable(stack.NATID, false)
-		// Not 100% sure this is the right way to add the prerouting rule, but it seems to work
-		natTable.Rules[stack.Prerouting] = *newRule
-
-		/* Example of how to add another rule to a chain
-		// Setup IPv6 filter for localhost re-routing
-		i6Filter := stack.EmptyFilter4()
-		i6Filter.Dst = tcpip.AddrFromSlice([]byte{0xfd, 0x90, 0x13, 0x37, 0x13, 0x37, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
-		fmt.Println(i6Filter.Dst.String())
-		i6Filter.DstMask = tcpip.AddrFromSlice([]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255})
-
-		i6Rule := new(stack.Rule)
-		i6Rule.Filter = i6Filter
-
-		NetworkProtocolIPv6 := tcpip.NetworkProtocolNumber(34525)
-		// This fails because apparently routing to ::1 isn't allowed. https://serverfault.com/questions/1122125/why-does-ip6tables-lose-packets-after-prerouting-to-a-different-interface
-		i6Rule.Target = &stack.DNATTarget{
-			//Addr:            tcpip.AddrFromSlice([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}),
-			Addr:            tcpip.AddrFromSlice([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 127, 0, 0, 1}),
-			NetworkProtocol: NetworkProtocolIPv6,
-			ChangeAddress:   true,
-			ChangePort:      false,
-		}
-
-		//Add the IPv6 rule, and fix up the associated chains and underflows
-		natTable.Rules = slices.Insert(natTable.Rules, int(stack.Prerouting)+1, *i6Rule)
-
-		for hook, ruleIndex := range natTable.BuiltinChains {
-			if hook != int(stack.Prerouting) && ruleIndex > 0 {
-				natTable.BuiltinChains[hook] = ruleIndex + 1
-			}
-		}
-		for hook, ruleIndex := range natTable.Underflows {
-			if hook != int(stack.Prerouting) && ruleIndex > 0 {
-				natTable.Underflows[hook] = ruleIndex + 1
-			}
-		}
-
-		fmt.Printf("%+v\n", natTable)
-		*/
-
-		//ForceReplaceTable ensures IPtables get enabled; ReplaceTable doesn't.
-		ipt.ForceReplaceTable(stack.NATID, natTable, false)
+		configureLocalhostForwarding(localhostAddr, s)
 
 		if localhostAddr.IsLoopback() {
 			fmt.Printf("=== WARNING: %s is a loopback IP. It will probably not work for Localhost Forwarding ===\n", localhostAddr.String())
@@ -627,4 +567,54 @@ func (c serveCmdConfig) Run() {
 	}()
 
 	wg.Wait()
+}
+
+// Setup iptables rule for localhost re-routing (DNAT)
+func configureLocalhostForwarding(localhostAddr netip.Addr, s *stack.Stack) {
+	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20231115214215-71bcc96c6e38/pkg/tcpip/stack
+	newFilter := stack.EmptyFilter4()
+	newFilter.Dst = tcpip.AddrFromSlice(localhostAddr.AsSlice())
+	newFilter.DstMask = tcpip.AddrFromSlice([]byte{255, 255, 255, 255})
+
+	newRule := new(stack.Rule)
+	newRule.Filter = newFilter
+
+	//Do address-only DNAT; port remains the same, so all ports are effectively forwarded to localhost
+	newRule.Target = &stack.DNATTarget{
+		Addr:            tcpip.AddrFromSlice([]byte{127, 0, 0, 1}),
+		NetworkProtocol: ipv4.ProtocolNumber,
+		ChangeAddress:   true,
+		ChangePort:      false,
+	}
+
+	ipt := s.IPTables()
+	natTable := ipt.GetTable(stack.NATID, false)
+	newTable := prependIPtableRule(natTable, *newRule, stack.Prerouting)
+
+	//ForceReplaceTable ensures IPtables get enabled; ReplaceTable doesn't.
+	ipt.ForceReplaceTable(stack.NATID, newTable, false)
+}
+
+// Adds a rule to the start of a table chain. 
+func prependIPtableRule(table stack.Table, newRule stack.Rule, chain stack.Hook) (stack.Table) {
+	insertIndex := int(table.BuiltinChains[chain])
+	fmt.Printf("Inserting rule into index %d\n", insertIndex)
+	table.Rules = slices.Insert(table.Rules, insertIndex, newRule)
+
+	// Increment the later chain and underflow index pointers to account for the rule added to the Rules slice
+	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20231115214215-71bcc96c6e38/pkg/tcpip/stack#Table
+	for chainHook, ruleIndex := range table.BuiltinChains {
+		//assumes each chain has its own unique starting rule index
+		if ruleIndex > insertIndex {
+			table.BuiltinChains[chainHook] = ruleIndex + 1
+			
+		}
+	}
+	for chainHook, ruleIndex := range table.Underflows {
+		if ruleIndex >= insertIndex {
+			table.Underflows[chainHook] = ruleIndex + 1
+		}
+	}
+
+	return table
 }
