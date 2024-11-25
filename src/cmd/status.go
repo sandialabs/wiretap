@@ -19,6 +19,16 @@ type statusCmdConfig struct {
 	configFileE2EE  string
 }
 
+// Represents one Server or Client in tree
+type Node struct {
+	peerConfig  peer.PeerConfig
+	relayConfig peer.Config
+	e2eeConfig  peer.Config
+	children    []*Node
+	interfaces  []api.HostInterface
+	error       string
+}
+
 // Defaults for status command.
 // See root command for shared defaults.
 var statusCmd = statusCmdConfig{
@@ -50,16 +60,6 @@ func init() {
 
 // Run attempts to parse config files into a network diagram.
 func (cc statusCmdConfig) Run() {
-	// Start building tree.
-	type Node struct {
-		peerConfig  peer.PeerConfig
-		relayConfig peer.Config
-		e2eeConfig  peer.Config
-		children    []*Node
-		interfaces  []api.HostInterface
-		error       string
-	}
-
 	var err error
 
 	// Parse the relay and e2ee config files
@@ -81,32 +81,21 @@ func (cc statusCmdConfig) Run() {
 	nodes := make(map[string]Node)
 	var errorNodes []Node
 	e2ee_peer_list := client.e2eeConfig.GetPeers()
+	nodeChannel := make(chan Node)
 	for _, ep := range e2ee_peer_list {
-		relayConfig, e2eeConfig, err := api.ServerInfo(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
-		if err != nil {
-			errorNodes = append(errorNodes, Node{
-				peerConfig: ep,
-				error:      err.Error(),
-			})
+		// Make all the API requests concurrently to speed things up
+		go cc.makeAPIRequests(nodeChannel, ep)
+	}
 
+	// Don't need to do anything with values, just need to loop the same number of times
+	for range e2ee_peer_list {
+		responseNode := <- nodeChannel
+
+		if responseNode.error == "" {
+			nodes[responseNode.relayConfig.GetPublicKey()] = responseNode
 		} else {
-			var interfaces []api.HostInterface
-			if cc.networkInfo {
-				interfaces, err = api.ServerInterfaces(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
-				if err != nil {
-					interfaces = append(interfaces, api.HostInterface{
-						Name: "ERROR: " + err.Error(),
-					})
-				}
-			}
-
-			nodes[relayConfig.GetPublicKey()] = Node{
-				peerConfig:  ep,
-				relayConfig: relayConfig,
-				e2eeConfig:  e2eeConfig,
-				interfaces: interfaces,
-			}
-		}
+			errorNodes = append(errorNodes, responseNode)
+		}	
 	}
 
 	// Build tree by adding each relay node as a child.
@@ -235,6 +224,36 @@ Network Interfaces:
 			fmt.Fprintln(color.Output, WhiteBold(t))
 		}
 	}
+}
+
+func (cc statusCmdConfig) makeAPIRequests(ch chan<- Node, ep peer.PeerConfig) {
+	relayConfig, e2eeConfig, err := api.ServerInfo(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
+		if err != nil {
+			ch <- Node{
+				peerConfig: ep,
+				error:      err.Error(),
+			}
+			return
+
+		} else {
+			var interfaces []api.HostInterface
+			if cc.networkInfo {
+				interfaces, err = api.ServerInterfaces(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
+				if err != nil {
+					interfaces = append(interfaces, api.HostInterface{
+						Name: "ERROR: " + err.Error(),
+					})
+				}
+			}
+
+			ch <- Node{
+				peerConfig:  ep,
+				relayConfig: relayConfig,
+				e2eeConfig:  e2eeConfig,
+				interfaces: interfaces,
+			}
+			return
+		}
 }
 
 func errorWrap(text string, lineWidth int) string {
