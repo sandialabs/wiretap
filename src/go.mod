@@ -1,6 +1,8 @@
 module wiretap
 
-go 1.20
+go 1.21.1
+
+toolchain go1.23.3
 
 replace golang.zx2c4.com/wireguard => github.com/luker983/wireguard-go v0.0.0-20231019223227-fc689040dc0a
 
@@ -17,7 +19,7 @@ require (
 	golang.org/x/net v0.23.0
 	golang.zx2c4.com/wireguard v0.0.0-20220920152132-bb719d3a6e2c
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20221104135756-97bc4ad4a1cb
-	gvisor.dev/gvisor v0.0.0-20230927004350-cbd86285d259
+	gvisor.dev/gvisor v0.0.0-20231115214215-71bcc96c6e38
 )
 
 require (
@@ -37,10 +39,10 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/sync v0.3.0 // indirect
+	golang.org/x/sync v0.4.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/time v0.1.0 // indirect
+	golang.org/x/time v0.3.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

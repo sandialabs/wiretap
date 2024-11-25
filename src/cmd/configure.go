@@ -35,6 +35,7 @@ type configureCmdConfig struct {
 	keepalive        int
 	mtu              int
 	disableV6        bool
+	localhostIP      string
 }
 
 // Defaults for configure command.
@@ -61,6 +62,7 @@ var configureCmdArgs = configureCmdConfig{
 	keepalive:        Keepalive,
 	mtu:              MTU,
 	disableV6:        false,
+	localhostIP:      "",
 }
 
 // configureCmd represents the configure command.
@@ -82,7 +84,8 @@ func init() {
 	configureCmd.Flags().BoolVar(&configureCmdArgs.outbound, "outbound", configureCmdArgs.outbound, "client will initiate handshake to server; --endpoint now specifies server's listening socket instead of client's, and --port assigns the server's listening port instead of client's")
 	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for wireguard relay. Default is to copy the --endpoint port. If --outbound, sets port for the server; else for the client.")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.nickname, "nickname", "n", configureCmdArgs.nickname, "Server nickname to display in 'status' command")
-  
+	configureCmd.Flags().StringVarP(&configureCmdArgs.localhostIP, "localhost-ip", "i", configureCmdArgs.localhostIP, "[EXPERIMENTAL] Redirect wiretap packets destined for this IPv4 address to server's localhost")
+
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileRelay, "relay-output", "", configureCmdArgs.configFileRelay, "wireguard relay config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileE2EE, "e2ee-output", "", configureCmdArgs.configFileE2EE, "wireguard E2EE config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileServer, "server-output", "s", configureCmdArgs.configFileServer, "wiretap server config output filename")
@@ -93,7 +96,7 @@ func init() {
 	configureCmd.Flags().IntVarP(&configureCmdArgs.keepalive, "keepalive", "k", configureCmdArgs.keepalive, "tunnel keepalive in seconds, only applies to outbound handshakes")
 	configureCmd.Flags().IntVarP(&configureCmdArgs.mtu, "mtu", "m", configureCmdArgs.mtu, "tunnel MTU")
 	configureCmd.Flags().BoolVarP(&configureCmdArgs.disableV6, "disable-ipv6", "", configureCmdArgs.disableV6, "disables IPv6")
-	
+
 	configureCmd.Flags().StringVarP(&configureCmdArgs.clientAddr4Relay, "ipv4-relay", "", configureCmdArgs.clientAddr4Relay, "ipv4 relay address")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.clientAddr6Relay, "ipv6-relay", "", configureCmdArgs.clientAddr6Relay, "ipv6 relay address")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.clientAddr4E2EE, "ipv4-e2ee", "", configureCmdArgs.clientAddr4E2EE, "ipv4 e2ee address")
@@ -112,15 +115,15 @@ func init() {
 	configureCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
 			for _, f := range []string{
-				"api", 
-				"ipv4-relay", 
-				"ipv6-relay", 
-				"ipv4-e2ee", 
-				"ipv6-e2ee", 
-				"ipv4-relay-server", 
-				"ipv6-relay-server", 
-				"keepalive", 
-				"mtu", 
+				"api",
+				"ipv4-relay",
+				"ipv6-relay",
+				"ipv4-e2ee",
+				"ipv6-e2ee",
+				"ipv4-relay-server",
+				"ipv6-relay-server",
+				"keepalive",
+				"mtu",
 				"disable-ipv6",
 				"relay-output",
 				"e2ee-output",
@@ -141,6 +144,9 @@ func init() {
 func (c configureCmdConfig) Run() {
 	var err error
 
+	if c.localhostIP != "" {
+		c.allowedIPs = append(c.allowedIPs, c.localhostIP+"/32")
+	}
 	if c.disableV6 && netip.MustParsePrefix(c.apiAddr).Addr().Is6() {
 		c.apiAddr = c.apiv4Addr
 	}
@@ -177,16 +183,16 @@ func (c configureCmdConfig) Run() {
 	if !c.disableV6 {
 		clientE2EEAddrs = append(clientE2EEAddrs, c.clientAddr6E2EE)
 	}
-	
+
 	if c.port == USE_ENDPOINT_PORT {
 		c.port = portFromEndpoint(c.endpoint)
 	}
-	
+
 	// We only configure one of these (based on --outbound or not)
 	// The other must be manually changed in the configs/command/envs
-	var clientPort int;
-	var serverPort int;
-	
+	var clientPort int
+	var serverPort int
+
 	if c.outbound {
 		clientPort = Port
 		serverPort = c.port
@@ -194,7 +200,7 @@ func (c configureCmdConfig) Run() {
 		clientPort = c.port
 		serverPort = Port
 	}
-	
+
 	err = serverConfigRelay.SetPort(serverPort)
 	check("failed to set port", err)
 
@@ -242,7 +248,7 @@ func (c configureCmdConfig) Run() {
 				PublicKey:  serverConfigE2EE.GetPublicKey(),
 				AllowedIPs: c.allowedIPs,
 				Endpoint:   net.JoinHostPort(relaySubnet4.Addr().Next().Next().String(), fmt.Sprint(E2EEPort)),
-				Nickname:  c.nickname,
+				Nickname:   c.nickname,
 			},
 		},
 		Addresses: clientE2EEAddrs,
@@ -276,6 +282,10 @@ func (c configureCmdConfig) Run() {
 	if c.mtu != MTU {
 		err = serverConfigRelay.SetMTU(c.mtu)
 		check("failed to set mtu", err)
+	}
+	if c.localhostIP != "" {
+		err = serverConfigRelay.SetLocalhostIP(c.localhostIP)
+		check("failed to set localhost IP", err)
 	}
 
 	// Add number to filename if it already exists.

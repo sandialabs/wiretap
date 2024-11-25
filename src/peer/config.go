@@ -14,17 +14,19 @@ import (
 )
 
 type Config struct {
-	config    wgtypes.Config
-	mtu       int
-	peers     []PeerConfig
-	addresses []net.IPNet
+	config      wgtypes.Config
+	mtu         int
+	peers       []PeerConfig
+	addresses   []net.IPNet
+	localhostIP string
 }
 
 type configJSON struct {
-	Config    wgtypes.Config
-	MTU       int
-	Peers     []PeerConfig
-	Addresses []net.IPNet
+	Config      wgtypes.Config
+	MTU         int
+	Peers       []PeerConfig
+	Addresses   []net.IPNet
+	LocalhostIP string
 }
 
 type ConfigArgs struct {
@@ -35,6 +37,7 @@ type ConfigArgs struct {
 	ReplacePeers bool
 	Peers        []PeerConfigArgs
 	Addresses    []string
+	LocalhostIP  string
 }
 
 type Shell uint
@@ -152,6 +155,9 @@ func ParseConfig(filename string) (c Config, err error) {
 						return c, e
 					}
 					err = c.SetMTU(mtu)
+				case "localhostip":
+					err = c.SetLocalhostIP(value)
+					fmt.Println("LocalhostIP value parsed")
 				}
 				if err != nil {
 					return c, err
@@ -163,13 +169,13 @@ func ParseConfig(filename string) (c Config, err error) {
 				if len(line) == 0 {
 					continue
 				}
-				
+
 				if strings.HasPrefix(line, CUSTOM_PREFIX) { //special wiretap-specific values
 					line = line[len(CUSTOM_PREFIX):]
 				} else if line[0] == '#' {
 					continue
 				}
-				
+
 				key, value, err := parseConfigLine(line)
 				if err != nil {
 					return c, err
@@ -220,6 +226,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		c.mtu,
 		c.peers,
 		c.addresses,
+		c.localhostIP,
 	})
 }
 
@@ -375,6 +382,15 @@ func (c *Config) GetPeerEndpoint(i int) string {
 	return ""
 }
 
+func (c *Config) GetLocalhostIP() string {
+	return c.localhostIP
+}
+
+func (c *Config) SetLocalhostIP(ip string) error {
+	c.localhostIP = ip
+	return nil
+}
+
 // Convert config to peer config, only transfers keys.
 func (c *Config) AsPeer() (p PeerConfig, err error) {
 	p, err = NewPeerConfig()
@@ -401,6 +417,9 @@ func (c *Config) AsFile() string {
 	if c.mtu != 0 {
 		s.WriteString(fmt.Sprintf("MTU = %d\n", c.mtu))
 	}
+	if c.localhostIP != "" {
+		s.WriteString(fmt.Sprintf("LocalhostIP = %s\n", c.localhostIP))
+	}
 	for _, p := range c.peers {
 		s.WriteString(fmt.Sprintf("\n%s", p.AsFile()))
 	}
@@ -414,7 +433,7 @@ func (c *Config) AsShareableFile() string {
 	s.WriteString("[Peer]\n")
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", c.config.PrivateKey.PublicKey().String()))
 	s.WriteString("AllowedIPs = 0.0.0.0/32\n")
-	
+
 	return s.String()
 }
 
@@ -506,6 +525,11 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 		vals = append(vals, "true")
 	}
 
+	if len(relayConfig.GetLocalhostIP()) > 0 {
+		keys = append(keys, "WIRETAP_RELAY_INTERFACE_LOCALHOSTIP")
+		vals = append(vals, relayConfig.GetLocalhostIP())
+	}
+
 	switch shell {
 	case POSIX:
 		for i := 0; i < len(keys); i++ {
@@ -542,6 +566,10 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config) string {
 
 	if relayConfig.mtu != 0 {
 		s.WriteString(fmt.Sprintf("MTU = %d\n", relayConfig.mtu))
+	}
+
+	if relayConfig.localhostIP != "" {
+		s.WriteString(fmt.Sprintf("LocalhostIP = %s\n", relayConfig.GetLocalhostIP()))
 	}
 
 	// Relay Peer.

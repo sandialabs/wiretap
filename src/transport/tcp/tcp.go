@@ -49,14 +49,14 @@ func Handler(c Config) func(*tcp.ForwarderRequest) {
 		addr, _ := netip.AddrFromSlice(s.LocalAddress.AsSlice())
 		err := transport.GetConnCounts().AddAddress(addr, c.Tnet.Stack(), c.StackLock)
 		if err != nil {
-			log.Println("failed to add address:", err)
+			log.Println("failed to add address: ", err)
 			req.Complete(false)
 			return
 		}
 		defer func() {
 			err := transport.GetConnCounts().RemoveAddress(addr, c.Tnet.Stack(), c.StackLock)
 			if err != nil {
-				log.Println("failed to remove address:", err)
+				log.Println("failed to remove address: ", err)
 			}
 		}()
 

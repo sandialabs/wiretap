@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"slices"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -17,8 +18,10 @@ import (
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
 	"golang.zx2c4.com/wireguard/tun/netstack"
+	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
+	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	gtcp "gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	gudp "gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 
@@ -47,6 +50,7 @@ type serveCmdConfig struct {
 	keepaliveCount    uint
 	keepaliveInterval uint
 	disableV6         bool
+	localhostIP       string
 }
 
 type wiretapDefaultConfig struct {
@@ -82,6 +86,7 @@ var serveCmd = serveCmdConfig{
 	keepaliveCount:    3,
 	keepaliveInterval: 60,
 	disableV6:         false,
+	localhostIP:       "",
 }
 
 var wiretapDefault = wiretapDefaultConfig{
@@ -124,6 +129,7 @@ func init() {
 	cmd.Flags().BoolVarP(&serveCmd.disableV6, "disable-ipv6", "", serveCmd.disableV6, "disable ipv6")
 	cmd.Flags().BoolVarP(&serveCmd.logging, "log", "l", serveCmd.logging, "enable logging to file")
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
+	cmd.Flags().StringVarP(&serveCmd.localhostIP, "localhost-ip", "i", serveCmd.localhostIP, "[EXPERIMENTAL] redirect Wiretap packets destined for this IPv4 address to server's localhost")
 	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
 	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
 	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
@@ -143,6 +149,9 @@ func init() {
 	check("error binding flag to viper", err)
 
 	err = viper.BindPFlag("disableipv6", cmd.Flags().Lookup("disable-ipv6"))
+	check("error binding flag to viper", err)
+
+	err = viper.BindPFlag("Relay.Interface.LocalhostIP", cmd.Flags().Lookup("localhost-ip"))
 	check("error binding flag to viper", err)
 
 	// Quiet and debug flags must be used independently.
@@ -484,6 +493,30 @@ func (c serveCmdConfig) Run() {
 	}
 	s.SetTransportProtocolHandler(gudp.ProtocolNumber, udp.Handler(udpConfig))
 
+	// Setup localhost forwarding IP using IPTables
+	if viper.IsSet("Relay.Interface.LocalhostIP") && viper.GetString("Relay.Interface.LocalhostIP") != "" {
+		localhostAddr, err := netip.ParseAddr(viper.GetString("Relay.Interface.LocalhostIP"))
+		check("failed to parse localhost-ip address", err)
+		if len(localhostAddr.AsSlice()) != 4 {
+			log.Fatalf("Localhost IP must be an IPv4 address")
+		}
+
+		configureLocalhostForwarding(localhostAddr, s)
+
+		if localhostAddr.IsLoopback() {
+			fmt.Printf("=== WARNING: %s is a loopback IP. It will probably not work for Localhost Forwarding ===\n", localhostAddr.String())
+
+		} else if localhostAddr.IsMulticast() {
+			fmt.Printf("=== WARNING: %s is a Multicast IP. Your OS might still send extra packets to other IPs when you target this IP ===\n", localhostAddr.String())
+
+		} else if !localhostAddr.IsPrivate() {
+			fmt.Printf("=== WARNING: %s is a public IP. If Localhost Forwarding fails, your traffic may actually touch that IP ===\n", localhostAddr.String())
+		}
+
+		fmt.Println("Localhost Forwarding configured for ", localhostAddr)
+		fmt.Println()
+	}
+
 	// Make new relay device.
 	devRelay := device.NewDevice(tunRelay, conn.NewDefaultBind(), device.NewLogger(logger, ""))
 	// Configure wireguard.
@@ -534,4 +567,54 @@ func (c serveCmdConfig) Run() {
 	}()
 
 	wg.Wait()
+}
+
+// Setup iptables rule for localhost re-routing (DNAT)
+func configureLocalhostForwarding(localhostAddr netip.Addr, s *stack.Stack) {
+	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20231115214215-71bcc96c6e38/pkg/tcpip/stack
+	newFilter := stack.EmptyFilter4()
+	newFilter.Dst = tcpip.AddrFromSlice(localhostAddr.AsSlice())
+	newFilter.DstMask = tcpip.AddrFromSlice([]byte{255, 255, 255, 255})
+
+	newRule := new(stack.Rule)
+	newRule.Filter = newFilter
+
+	//Do address-only DNAT; port remains the same, so all ports are effectively forwarded to localhost
+	newRule.Target = &stack.DNATTarget{
+		Addr:            tcpip.AddrFromSlice([]byte{127, 0, 0, 1}),
+		NetworkProtocol: ipv4.ProtocolNumber,
+		ChangeAddress:   true,
+		ChangePort:      false,
+	}
+
+	ipt := s.IPTables()
+	natTable := ipt.GetTable(stack.NATID, false)
+	newTable := prependIPtableRule(natTable, *newRule, stack.Prerouting)
+
+	//ForceReplaceTable ensures IPtables get enabled; ReplaceTable doesn't.
+	ipt.ForceReplaceTable(stack.NATID, newTable, false)
+}
+
+// Adds a rule to the start of a table chain. 
+func prependIPtableRule(table stack.Table, newRule stack.Rule, chain stack.Hook) (stack.Table) {
+	insertIndex := int(table.BuiltinChains[chain])
+	fmt.Printf("Inserting rule into index %d\n", insertIndex)
+	table.Rules = slices.Insert(table.Rules, insertIndex, newRule)
+
+	// Increment the later chain and underflow index pointers to account for the rule added to the Rules slice
+	// https://pkg.go.dev/gvisor.dev/gvisor@v0.0.0-20231115214215-71bcc96c6e38/pkg/tcpip/stack#Table
+	for chainHook, ruleIndex := range table.BuiltinChains {
+		//assumes each chain has its own unique starting rule index
+		if ruleIndex > insertIndex {
+			table.BuiltinChains[chainHook] = ruleIndex + 1
+			
+		}
+	}
+	for chainHook, ruleIndex := range table.Underflows {
+		if ruleIndex >= insertIndex {
+			table.Underflows[chainHook] = ruleIndex + 1
+		}
+	}
+
+	return table
 }
