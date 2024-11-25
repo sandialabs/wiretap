@@ -26,6 +26,9 @@ type request struct {
 	Body   []byte
 }
 
+// Re-export the server api struct so files importing this package can access it
+type HostInterface serverapi.HostInterface
+
 // MakeRequest attempts to send an API query to the Wiretap server.
 func makeRequest(req request) ([]byte, error) {
 	// Never use a proxy for API requests, they must go direct through the Wiretap network
@@ -91,6 +94,24 @@ func ServerInfo(apiAddr netip.AddrPort) (peer.Config, peer.Config, error) {
 	}
 
 	return *configs.RelayConfig, *configs.E2EEConfig, nil
+}
+
+func ServerInterfaces(apiAddr netip.AddrPort) ([]HostInterface, error) {
+	body, err := makeRequest(request{
+		URL:    makeUrl(apiAddr, "serverinterfaces", []string{}),
+		Method: "GET",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var interfaces []HostInterface
+	err = json.Unmarshal(body, &interfaces)
+	if err != nil {
+		return nil, err
+	}
+
+	return interfaces, nil
 }
 
 func AllocateNode(apiAddr netip.AddrPort, peerType peer.PeerType) (serverapi.NetworkState, error) {

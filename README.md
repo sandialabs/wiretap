@@ -294,6 +294,9 @@ Once the client configs have been imported and Wireguard is started, you can vie
   ╰─────────────────────╯
 ```
 
+> [!TIP]
+> Add the `--network-info` flag to this command to get a list of each Server host's network interfaces and associated CIDR addresses. 
+
 ## Add Server (Optional)
 
 <div align="center">

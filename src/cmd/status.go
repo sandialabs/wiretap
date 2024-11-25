@@ -14,6 +14,7 @@ import (
 )
 
 type statusCmdConfig struct {
+	networkInfo     bool
 	configFileRelay string
 	configFileE2EE  string
 }
@@ -21,6 +22,7 @@ type statusCmdConfig struct {
 // Defaults for status command.
 // See root command for shared defaults.
 var statusCmd = statusCmdConfig{
+	networkInfo:     false,
 	configFileRelay: ConfigRelay,
 	configFileE2EE:  ConfigE2EE,
 }
@@ -39,6 +41,7 @@ func init() {
 
 	rootCmd.AddCommand(cmd)
 
+	cmd.Flags().BoolVarP(&statusCmd.networkInfo, "network-info", "n", statusCmd.networkInfo, "Display network info for each online server node")
 	cmd.Flags().StringVarP(&statusCmd.configFileRelay, "relay", "1", statusCmd.configFileRelay, "wireguard relay config input filename")
 	cmd.Flags().StringVarP(&statusCmd.configFileE2EE, "e2ee", "2", statusCmd.configFileE2EE, "wireguard E2EE config input filename")
 
@@ -46,22 +49,23 @@ func init() {
 }
 
 // Run attempts to parse config files into a network diagram.
-func (c statusCmdConfig) Run() {
+func (cc statusCmdConfig) Run() {
 	// Start building tree.
 	type Node struct {
 		peerConfig  peer.PeerConfig
 		relayConfig peer.Config
 		e2eeConfig  peer.Config
 		children    []*Node
+		interfaces  []api.HostInterface
 		error       string
 	}
 
 	var err error
 
 	// Parse the relay and e2ee config files
-	clientConfigRelay, err := peer.ParseConfig(c.configFileRelay)
+	clientConfigRelay, err := peer.ParseConfig(cc.configFileRelay)
 	check("failed to parse relay config file", err)
-	clientConfigE2EE, err := peer.ParseConfig(c.configFileE2EE)
+	clientConfigE2EE, err := peer.ParseConfig(cc.configFileE2EE)
 	check("failed to parse e2ee config file", err)
 
 	client := Node{
@@ -81,15 +85,26 @@ func (c statusCmdConfig) Run() {
 		relayConfig, e2eeConfig, err := api.ServerInfo(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
 		if err != nil {
 			errorNodes = append(errorNodes, Node{
-				peerConfig:  ep,
-				error:       err.Error(),
+				peerConfig: ep,
+				error:      err.Error(),
 			})
-			
+
 		} else {
+			var interfaces []api.HostInterface
+			if cc.networkInfo {
+				interfaces, err = api.ServerInterfaces(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
+				if err != nil {
+					interfaces = append(interfaces, api.HostInterface{
+						Name: "ERROR: " + err.Error(),
+					})
+				}
+			}
+
 			nodes[relayConfig.GetPublicKey()] = Node{
 				peerConfig:  ep,
 				relayConfig: relayConfig,
 				e2eeConfig:  e2eeConfig,
+				interfaces: interfaces,
 			}
 		}
 	}
@@ -131,19 +146,43 @@ func (c statusCmdConfig) Run() {
 			ips := []string{}
 			var api string
 			for j, a := range c.peerConfig.GetAllowedIPs() {
-				if j == len(c.peerConfig.GetAllowedIPs()) - 1 {
+				if j == len(c.peerConfig.GetAllowedIPs())-1 {
 					api = a.IP.String()
 				} else {
 					ips = append(ips, a.String())
 				}
 			}
-			t.AddChild(tree.NodeString(fmt.Sprintf(`server
+
+			nodeString := fmt.Sprintf(
+`server
  nickname: %v 
     relay: %v... 
      e2ee: %v... 
    
       api: %v 
-   routes: %v `, c.peerConfig.GetNickname(), c.relayConfig.GetPublicKey()[:8], c.e2eeConfig.GetPublicKey()[:8], api, strings.Join(ips, ","))))
+   routes: %v `, 
+   				c.peerConfig.GetNickname(), 
+   				c.relayConfig.GetPublicKey()[:8], 
+				c.e2eeConfig.GetPublicKey()[:8], 
+				api, 
+				strings.Join(ips, ","),
+			)
+			
+			if cc.networkInfo {
+				nodeString += `
+
+Network Interfaces:
+-------------------
+`
+				for _, ifx := range c.interfaces {
+					nodeString += fmt.Sprintf("%v:\n", ifx.Name)
+					for _, a := range ifx.Addrs {
+						nodeString += strings.Repeat(" ", 2) + a.String() + "\n"
+					}
+				}
+			}
+
+			t.AddChild(tree.NodeString(nodeString))
 			child, err := t.Child(0)
 			check("could not build tree", err)
 			treeTraversal(node.children[i], child)
@@ -156,31 +195,39 @@ func (c statusCmdConfig) Run() {
 	fmt.Println()
 	fmt.Fprintln(color.Output, WhiteBold(t))
 	fmt.Println()
-	
+
 	if len(errorNodes) > 0 {
 		// Display known peers that we had issues connecting to
 		fmt.Fprintln(color.Output, WhiteBold("Peers with Errors:"))
 		fmt.Println()
-		
+
 		for _, node := range errorNodes {
 			ips := []string{}
 			var api string
 			for j, a := range node.peerConfig.GetAllowedIPs() {
-				if j == len(node.peerConfig.GetAllowedIPs()) - 1 {
+				if j == len(node.peerConfig.GetAllowedIPs())-1 {
 					api = a.IP.String()
 				} else {
 					ips = append(ips, a.String())
 				}
 			}
-			
-			t = tree.NewTree(tree.NodeString(fmt.Sprintf(`server
+
+			nodeString := fmt.Sprintf(
+`server
 
  nickname: %v 
-      e2ee: %v... 
-       api: %v 
-    routes: %v 
+     e2ee: %v... 
+      api: %v 
+   routes: %v 
+		   
+ error: %v`, 
+ 				node.peerConfig.GetNickname(), 
+ 				node.peerConfig.GetPublicKey().String()[:8], 
+				api, strings.Join(ips, ","), 
+				errorWrap(node.error, 80),
+			)
 
- error: %v`, node.peerConfig.GetNickname(), node.peerConfig.GetPublicKey().String()[:8], api, strings.Join(ips, ","), errorWrap(node.error, 80))))
+			t = tree.NewTree(tree.NodeString(nodeString))
 			fmt.Fprintln(color.Output, WhiteBold(t))
 		}
 	}
