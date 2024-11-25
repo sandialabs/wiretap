@@ -167,6 +167,10 @@ func (cc statusCmdConfig) Run() {
 				api, 
 				strings.Join(ips, ","),
 			)
+
+			if c.relayConfig.GetLocalhostIP() != "" {
+				nodeString += "\n lhost IP: " + c.relayConfig.GetLocalhostIP()
+			}
 			
 			if cc.networkInfo {
 				nodeString += `
@@ -175,7 +179,7 @@ Network Interfaces:
 -------------------
 `
 				for _, ifx := range c.interfaces {
-					nodeString += fmt.Sprintf("%v:\n", ifx.Name)
+					nodeString += ifx.Name + "\n"
 					for _, a := range ifx.Addrs {
 						nodeString += strings.Repeat(" ", 2) + a.String() + "\n"
 					}

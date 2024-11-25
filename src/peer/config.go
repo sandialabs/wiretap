@@ -101,6 +101,13 @@ func GetConfig(args ConfigArgs) (Config, error) {
 		}
 	}
 
+	if args.LocalhostIP != "" {
+		err = c.SetLocalhostIP(args.LocalhostIP)
+		if err != nil {
+			return Config{}, err
+		}
+	}
+
 	return c, nil
 }
 
@@ -157,7 +164,6 @@ func ParseConfig(filename string) (c Config, err error) {
 					err = c.SetMTU(mtu)
 				case "localhostip":
 					err = c.SetLocalhostIP(value)
-					fmt.Println("LocalhostIP value parsed")
 				}
 				if err != nil {
 					return c, err
@@ -241,6 +247,7 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 	c.config = tmp.Config
 	c.peers = tmp.Peers
 	c.addresses = tmp.Addresses
+	c.localhostIP = tmp.LocalhostIP
 
 	return nil
 }
