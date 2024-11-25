@@ -542,16 +542,21 @@ Please see the [Demo page in the Wiki](https://github.com/sandialabs/wiretap/wik
 
 ## Localhost Server Access
 
-Sometimes you want to access many ports on the Server itself that are listening on the localhost/loopback interface instead of a public interface. Rather than setting up many individual port forwards, you can use Wiretap's "localhost IP" redirection feature. 
+Sometimes you want to access multiple ports on the Server itself that are bound to the localhost/loopback interface instead of an externally-accessible interface. Rather than setting up many individual port forwards to 127.0.0.1, you can use Wiretap's localhost redirection feature. 
 
 When running the `configure` or `add server` commands, you can specify a `--localhost-ip <IPv4 address>` argument. For example:
 ```bash
 ./wiretap configure --endpoint 7.3.3.1:1337 --routes 10.0.0.0/24 -i 192.168.137.137
 ```
-Any packets received by this Server through the Wiretap network with this target destination address (`192.168.137.137` in this example) will be rerouted to the Server host's `127.0.0.1` loopback address instead, with replies routed back to the Client appropriately. 
+Any packets received by this Server through the Wiretap network with this target destination address (`192.168.137.137` in this example) will be re-routed to the Server host's `127.0.0.1` loopback address instead, with replies routed back to the Client appropriately. The specified address will also be added as a route (with a `/32` mask) to the Client config file to ensure traffic generated with this destination is routed through the Wiretap network. 
+
+For example, with this configuration loaded, you can now easily access a webserver listening on `127.0.0.1:8080` on the Server host like this:
+```bash
+curl 192.168.137.137:8080
+```
 
 > [!CAUTION]
-> It is **strongly** recommended that you specify a private (non-routable) IP address to use for this option, preferably one that you know is not in use in the target network. This feature has only been lightly tested, so if the re-routing fails unexpectedly you want to ensure your traffic will go to a "safe" destination. For similar reasons you should not specify a broadcast address, or IPs that your Client already has routes for. 
+> It is **strongly** recommended that you specify a [private](https://www.arin.net/reference/research/statistics/address_filters/) (not publicly routable) IP address to use for this option, preferably one that you know is not in use in the target network. This feature has only been lightly tested, so if the redirection fails unexpectedly you want to ensure your traffic will go to a "safe" destination. For similar reasons you should not specify a broadcast address, or IPs that your Client already has routes for. 
 
 Under the hood, this feature is roughly equivalent to adding this `iptables` rule to Wiretap's userspace networking stack on the Server:
 ```
@@ -562,6 +567,7 @@ Limitations:
 - Currently this only works for TCP connections, and only for an IPv4 target address. 
 	- Unfortunately there's [not a clean way](https://serverfault.com/a/975890) to do NAT to the IPv6 `::1` loopback address, so this feature can't be used to access services listening exclusively on that IPv6 address. 
 - This feature does not provide access to other IPs in the 127.0.0.0/8 space. 
+- Added Clients currently won't have the redirection IPs automatically added to their routes. 
 
 
 ## TCP Tunneling
