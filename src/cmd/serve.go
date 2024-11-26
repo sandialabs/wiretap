@@ -342,6 +342,7 @@ func (c serveCmdConfig) Run() {
 			},
 		},
 		Addresses: relayAddresses,
+		LocalhostIP: viper.GetString("Relay.Interface.LocalhostIP"),
 	}
 
 	configRelay, err := peer.GetConfig(configRelayArgs)
@@ -598,7 +599,6 @@ func configureLocalhostForwarding(localhostAddr netip.Addr, s *stack.Stack) {
 // Adds a rule to the start of a table chain. 
 func prependIPtableRule(table stack.Table, newRule stack.Rule, chain stack.Hook) (stack.Table) {
 	insertIndex := int(table.BuiltinChains[chain])
-	fmt.Printf("Inserting rule into index %d\n", insertIndex)
 	table.Rules = slices.Insert(table.Rules, insertIndex, newRule)
 
 	// Increment the later chain and underflow index pointers to account for the rule added to the Rules slice
