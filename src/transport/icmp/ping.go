@@ -71,8 +71,10 @@ func (execPing) ping(addr string) (success bool, err error) {
 	switch runtime.GOOS {
 	case "windows":
 		args = []string{pingPath, "-n", "1", "-w", "1000", addr}
-	default:
+	case "darwin":
 		args = []string{pingPath, "-c", "1", "-t", "1", addr}
+	default: //Linux, hopefully any others also use this format
+		args = []string{pingPath, "-c", "1", "-W", "1", addr}
 	}
 
 	cmd := &exec.Cmd{
