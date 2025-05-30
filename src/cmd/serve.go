@@ -283,7 +283,7 @@ func (c serveCmdConfig) Run() {
 		}
 	}
 
-	// If flag -d is set, delete the server config file.
+	// If flag --delete-config is set, delete the server config file.
 	if c.deleteConfig && c.configFile != "" {
 		if err := os.Remove(c.configFile); err != nil {
 			check("error deleting config file", err)
