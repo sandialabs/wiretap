@@ -125,7 +125,7 @@ func init() {
 	// Flags.
 	cmd.Flags().StringVarP(&serveCmd.configFile, "config-file", "f", serveCmd.configFile, "wireguard config file to read from")
 	// Add flag to delete server config file.
-	cmd.Flags().BoolVarP(&serveCmd.deleteConfig, "delete-config", "", serveCmd.deleteConfig, "delete wireguard config file after ingesting it")
+	cmd.Flags().BoolVarP(&serveCmd.deleteConfig, "delete-config", "D", serveCmd.deleteConfig, "delete wireguard config file after ingesting it")
 	cmd.Flags().IntP("port", "p", wiretapDefault.port, "listener port to use for relay connections")
 	cmd.Flags().BoolVarP(&serveCmd.quiet, "quiet", "q", serveCmd.quiet, "silence wiretap log messages")
 	cmd.Flags().BoolVarP(&serveCmd.debug, "debug", "d", serveCmd.debug, "enable wireguard log messages")
