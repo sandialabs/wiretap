@@ -7,10 +7,10 @@ import (
 	"log"
 	"net/netip"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
-	"slices"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -39,6 +39,7 @@ type serveCmdConfig struct {
 	clientAddr6E2EE   string
 	clientAddr4Relay  string
 	clientAddr6Relay  string
+	deleteConfig      bool // Add member to struct to delete server config file.
 	quiet             bool
 	debug             bool
 	simple            bool
@@ -75,6 +76,7 @@ var serveCmd = serveCmdConfig{
 	clientAddr6E2EE:   ClientE2EESubnet6.Addr().Next().String(),
 	clientAddr4Relay:  ClientRelaySubnet4.Addr().Next().Next().String(),
 	clientAddr6Relay:  ClientRelaySubnet6.Addr().Next().Next().String(),
+	deleteConfig:      false,
 	quiet:             false,
 	debug:             false,
 	simple:            false,
@@ -122,6 +124,8 @@ func init() {
 
 	// Flags.
 	cmd.Flags().StringVarP(&serveCmd.configFile, "config-file", "f", serveCmd.configFile, "wireguard config file to read from")
+	// Add flag to delete server config file.
+	cmd.Flags().BoolVarP(&serveCmd.deleteConfig, "delete-config", "D", serveCmd.deleteConfig, "delete wireguard config file after ingesting it")
 	cmd.Flags().IntP("port", "p", wiretapDefault.port, "listener port to use for relay connections")
 	cmd.Flags().BoolVarP(&serveCmd.quiet, "quiet", "q", serveCmd.quiet, "silence wiretap log messages")
 	cmd.Flags().BoolVarP(&serveCmd.debug, "debug", "d", serveCmd.debug, "enable wireguard log messages")
@@ -279,6 +283,13 @@ func (c serveCmdConfig) Run() {
 		}
 	}
 
+	// If flag --delete-config is set, delete the server config file.
+	if c.deleteConfig && c.configFile != "" {
+		if err := os.Remove(c.configFile); err != nil {
+			check("error deleting config file", err)
+		}
+	}
+
 	// Synchronization vars.
 	var (
 		wg   sync.WaitGroup
@@ -341,7 +352,7 @@ func (c serveCmdConfig) Run() {
 				AllowedIPs: aips,
 			},
 		},
-		Addresses: relayAddresses,
+		Addresses:   relayAddresses,
 		LocalhostIP: viper.GetString("Relay.Interface.LocalhostIP"),
 	}
 
@@ -596,8 +607,8 @@ func configureLocalhostForwarding(localhostAddr netip.Addr, s *stack.Stack) {
 	ipt.ForceReplaceTable(stack.NATID, newTable, false)
 }
 
-// Adds a rule to the start of a table chain. 
-func prependIPtableRule(table stack.Table, newRule stack.Rule, chain stack.Hook) (stack.Table) {
+// Adds a rule to the start of a table chain.
+func prependIPtableRule(table stack.Table, newRule stack.Rule, chain stack.Hook) stack.Table {
 	insertIndex := int(table.BuiltinChains[chain])
 	table.Rules = slices.Insert(table.Rules, insertIndex, newRule)
 
@@ -607,7 +618,7 @@ func prependIPtableRule(table stack.Table, newRule stack.Rule, chain stack.Hook)
 		//assumes each chain has its own unique starting rule index
 		if ruleIndex > insertIndex {
 			table.BuiltinChains[chainHook] = ruleIndex + 1
-			
+
 		}
 	}
 	for chainHook, ruleIndex := range table.Underflows {
