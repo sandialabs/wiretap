@@ -319,11 +319,24 @@ func (c configureCmdConfig) Run() {
 
 	// Write server config file and get status string.
 	var fileStatusServer string
-	err = os.WriteFile(c.configFileServer, []byte(peer.CreateServerFile(serverConfigRelay, serverConfigE2EE)), 0600)
+	file, err := os.Create(c.configFileServer)
 	if err != nil {
-		fileStatusServer = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
+		fileStatusServer = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error creating server config file: %v", err)))
 	} else {
-		fileStatusServer = fmt.Sprintf("%s %s", GreenBold("server config:"), Green(c.configFileServer))
+		defer file.Close()
+
+		data := []string{
+			peer.CreateServerFile(serverConfigRelay, serverConfigE2EE),
+			"# POSIX Shell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple, c.disableV6),
+			"# Powershell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, c.simple, c.disableV6),
+		}
+
+		_, err = file.WriteString((strings.Join(data, "\n\n")))
+		if err != nil {
+			fileStatusServer = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
+		} else {
+			fileStatusServer = fmt.Sprintf("%s %s", GreenBold("server config:"), Green(c.configFileServer))
+		}
 	}
 
 	// Make config file string
