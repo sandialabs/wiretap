@@ -553,7 +553,7 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 	return s.String()
 }
 
-func CreateServerFile(relayConfig Config, e2eeConfig Config) string {
+func CreateServerFile(relayConfig Config, e2eeConfig Config, simple bool) string {
 	var s strings.Builder
 
 	// Relay Interface.
@@ -594,20 +594,21 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config) string {
 	if len(relayConfig.GetPeerEndpoint(0)) > 0 {
 		s.WriteString(fmt.Sprintf("Endpoint = %s\n", relayConfig.GetPeerEndpoint(0)))
 	}
+	if !simple {
+		// E2EE Interface.
+		s.WriteString("\n[E2EE.Interface]\n")
+		s.WriteString(fmt.Sprintf("PrivateKey = %s\n", e2eeConfig.GetPrivateKey()))
 
-	// E2EE Interface.
-	s.WriteString("\n[E2EE.Interface]\n")
-	s.WriteString(fmt.Sprintf("PrivateKey = %s\n", e2eeConfig.GetPrivateKey()))
+		if len(e2eeConfig.addresses) == 1 {
+			s.WriteString(fmt.Sprintf("Api = %s\n", e2eeConfig.addresses[0].IP.String()))
+		}
 
-	if len(e2eeConfig.addresses) == 1 {
-		s.WriteString(fmt.Sprintf("Api = %s\n", e2eeConfig.addresses[0].IP.String()))
-	}
-
-	// E2EE Peer.
-	s.WriteString("\n[E2EE.Peer]\n")
-	s.WriteString(fmt.Sprintf("PublicKey = %s\n", e2eeConfig.GetPeerPublicKey(0)))
-	if len(e2eeConfig.GetPeerEndpoint(0)) > 0 {
-		s.WriteString(fmt.Sprintf("Endpoint = %s\n", e2eeConfig.GetPeerEndpoint(0)))
+		// E2EE Peer.
+		s.WriteString("\n[E2EE.Peer]\n")
+		s.WriteString(fmt.Sprintf("PublicKey = %s\n", e2eeConfig.GetPeerPublicKey(0)))
+		if len(e2eeConfig.GetPeerEndpoint(0)) > 0 {
+			s.WriteString(fmt.Sprintf("Endpoint = %s\n", e2eeConfig.GetPeerEndpoint(0)))
+		}
 	}
 
 	return s.String()

@@ -27,6 +27,7 @@ type addServerCmdConfig struct {
 	port             int
 	nickname         string
 	localhostIP      string
+	simple           bool
 }
 
 var addServerCmdArgs = addServerCmdConfig{
@@ -39,6 +40,7 @@ var addServerCmdArgs = addServerCmdConfig{
 	port:             USE_ENDPOINT_PORT,
 	nickname:         "",
 	localhostIP:      "",
+	simple:           false,
 }
 
 // addServerCmd represents the server command.
@@ -382,7 +384,7 @@ func (c addServerCmdConfig) Run() {
 
 	// Write server config file and get status string.
 	var fileStatusServer string
-	err = os.WriteFile(c.configFileServer, []byte(peer.CreateServerFile(serverConfigRelay, serverConfigE2EE)), 0600)
+	err = os.WriteFile(c.configFileServer, []byte(peer.CreateServerFile(serverConfigRelay, serverConfigE2EE, c.simple)), 0600)
 	if err != nil {
 		fileStatusServer = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
 	} else {
