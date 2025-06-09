@@ -389,9 +389,9 @@ func (c addServerCmdConfig) Run() {
 		defer file.Close()
 
 		data := []string{
-			peer.CreateServerFile(serverConfigRelay, serverConfigE2EE),
-			"# POSIX Shell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple, c.disableV6),
-			"# Powershell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, c.simple, c.disableV6),
+			peer.CreateServerFile(serverConfigRelay, serverConfigE2EE, c.simple),
+			"# POSIX Shell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false, disableV6),
+			"# Powershell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, false, disableV6),
 		}
 
 		_, err = file.WriteString((strings.Join(data, "\n\n")))
