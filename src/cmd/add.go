@@ -7,17 +7,17 @@ import (
 )
 
 type addCmdConfig struct {
-	endpoint  string
-	outbound  bool
-	keepalive int
+	endpoint         string
+	outboundEndpoint string
+	keepalive        int
 }
 
 // Defaults for add command.
 // See root command for shared defaults.
 var addCmdArgs = addCmdConfig{
-	endpoint:  Endpoint,
-	outbound:  false,
-	keepalive: Keepalive,
+	endpoint:         Endpoint,
+	outboundEndpoint: Endpoint,
+	keepalive:        Keepalive,
 }
 
 // addCmd represents the add command.
@@ -31,13 +31,10 @@ var addCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(addCmd)
 
-	addCmd.PersistentFlags().StringVarP(&addCmdArgs.endpoint, "endpoint", "e", addCmdArgs.endpoint, "[REQUIRED] socket address of wireguard listener; client address if inbound handshake and server address if outbound (example \"1.2.3.4:51820\")")
-	addCmd.PersistentFlags().BoolVar(&addCmdArgs.outbound, "outbound", addCmdArgs.outbound, "use endpoint to initiate handshake out to server instead of the other way around")
+	addCmd.PersistentFlags().StringVarP(&addCmdArgs.endpoint, "endpoint", "e", addCmdArgs.endpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
+	addCmd.PersistentFlags().StringVarP(&addCmdArgs.outboundEndpoint, "outbound-endpoint", "o", addCmdArgs.outboundEndpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that client will connect to (example \"1.2.3.4:51820\"")
 
 	addCmd.PersistentFlags().IntVarP(&addCmdArgs.keepalive, "keepalive", "k", addCmdArgs.keepalive, "tunnel keepalive in seconds")
-
-	err := addCmd.MarkPersistentFlagRequired("endpoint")
-	check("failed to mark flag required", err)
 
 	addCmd.Flags().SortFlags = false
 	addCmd.PersistentFlags().SortFlags = false

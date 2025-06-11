@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -16,7 +17,6 @@ import (
 type configureCmdConfig struct {
 	allowedIPs       []string
 	endpoint         string
-	outbound         bool
 	outboundEndpoint string
 	port             int
 	sport            int
@@ -45,7 +45,6 @@ type configureCmdConfig struct {
 var configureCmdArgs = configureCmdConfig{
 	allowedIPs:       []string{""},
 	endpoint:         Endpoint,
-	outbound:         false,
 	outboundEndpoint: Endpoint,
 	port:             USE_ENDPOINT_PORT,
 	sport:            USE_ENDPOINT_PORT,
@@ -84,11 +83,10 @@ func init() {
 	rootCmd.AddCommand(configureCmd)
 
 	configureCmd.Flags().StringSliceVarP(&configureCmdArgs.allowedIPs, "routes", "r", configureCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap (example \"10.0.0.1/24\")")
-	configureCmd.Flags().StringVarP(&configureCmdArgs.endpoint, "endpoint", "e", configureCmdArgs.endpoint, "[REQUIRED] IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
-	configureCmd.Flags().BoolVar(&configureCmdArgs.outbound, "outbound", configureCmdArgs.outbound, "client will initiate handshake to server; --endpoint now specifies server's listening socket instead of client's, and --port assigns the server's listening port instead of client's")
-	configureCmd.Flags().StringVarP(&configureCmdArgs.outboundEndpoint, "outbound-endpoint", "o", configureCmdArgs.outboundEndpoint, "specific listening socket that client will initiate handshake to server over")
-	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for wireguard relay. Default is to copy the --endpoint port. If --outbound, sets port for the server; else for the client.")
-	configureCmd.Flags().IntVarP(&configureCmdArgs.sport, "sport", "S", configureCmdArgs.sport, "listener port for wireguard relay for the server")
+	configureCmd.Flags().StringVarP(&configureCmdArgs.endpoint, "endpoint", "e", configureCmdArgs.endpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
+	configureCmd.Flags().StringVarP(&configureCmdArgs.outboundEndpoint, "outbound-endpoint", "o", configureCmdArgs.outboundEndpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that client will connect to (example \"1.2.3.4:51820\"")
+	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for client wireguard relay. Default is to copy the --endpoint port.")
+	configureCmd.Flags().IntVarP(&configureCmdArgs.sport, "sport", "S", configureCmdArgs.sport, "listener port for server wireguard relay. Default is to copy the --outbound-endpoint port.")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.nickname, "nickname", "n", configureCmdArgs.nickname, "Server nickname to display in 'status' command")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.localhostIP, "localhost-ip", "i", configureCmdArgs.localhostIP, "[EXPERIMENTAL] Redirect wiretap packets destined for this IPv4 address to server's localhost")
 
@@ -111,8 +109,6 @@ func init() {
 	configureCmd.Flags().StringVarP(&configureCmdArgs.serverAddr6Relay, "ipv6-relay-server", "", configureCmdArgs.serverAddr6Relay, "ipv6 relay address of server")
 
 	err := configureCmd.MarkFlagRequired("routes")
-	check("failed to mark flag required", err)
-	err = configureCmd.MarkFlagRequired("endpoint")
 	check("failed to mark flag required", err)
 
 	configureCmd.Flags().SortFlags = false
@@ -190,16 +186,25 @@ func (c configureCmdConfig) Run() {
 		clientE2EEAddrs = append(clientE2EEAddrs, c.clientAddr6E2EE)
 	}
 
-	if c.port == USE_ENDPOINT_PORT {
-		c.port = portFromEndpoint(c.endpoint)
+	// Check for how client and server should connect
+	if c.endpoint == Endpoint && c.outboundEndpoint == Endpoint {
+		check("endpoint error", errors.New("connection between client and server not set"))
+	} else if len(c.endpoint) > 0 && len(c.outboundEndpoint) > 0 {
+		check("endpoint error", errors.New("conflicting connection configuration"))
 	}
 
-	if c.sport == USE_ENDPOINT_PORT && c.outboundEndpoint == Endpoint {
-		c.sport = Port
-	} else if c.outboundEndpoint != Endpoint {
-		c.sport = portFromEndpoint(c.outboundEndpoint)
+	if len(c.endpoint) > 0 {
+		c.port = portFromEndpoint(c.endpoint)
+	} else if c.port == USE_ENDPOINT_PORT {
+		c.port = Port
 	}
-	
+
+	if len(c.outboundEndpoint) > 0 {
+		c.sport = portFromEndpoint(c.outboundEndpoint)
+	} else if c.sport == USE_ENDPOINT_PORT {
+		c.sport = Port
+	}
+
 	var clientPort int
 	var serverPort int
 
@@ -228,14 +233,14 @@ func (c configureCmdConfig) Run() {
 					}
 				}(),
 				Endpoint: func() string {
-					if c.outbound {
+					if len(c.outboundEndpoint) > 0 {
 						return c.outboundEndpoint
 					} else {
 						return ""
 					}
 				}(),
 				PersistentKeepaliveInterval: func() int {
-					if c.outbound {
+					if len(c.outboundEndpoint) > 0 {
 						return c.keepalive
 					} else {
 						return 0
@@ -273,14 +278,12 @@ func (c configureCmdConfig) Run() {
 	check("failed to parse e2ee config as peer", err)
 
 	if len(c.endpoint) > 0 {
-		if !c.outbound {
-			err = clientPeerConfigRelay.SetEndpoint(c.endpoint)
-			check("failed to set endpoint", err)
-		}
-
-		err = clientPeerConfigE2EE.SetEndpoint(net.JoinHostPort(clientConfigRelay.GetAddresses()[0].IP.String(), fmt.Sprint(E2EEPort)))
+		err = clientPeerConfigRelay.SetEndpoint(c.endpoint)
 		check("failed to set endpoint", err)
 	}
+
+	err = clientPeerConfigE2EE.SetEndpoint(net.JoinHostPort(clientConfigRelay.GetAddresses()[0].IP.String(), fmt.Sprint(E2EEPort)))
+	check("failed to set endpoint", err)
 
 	serverConfigRelay.AddPeer(clientPeerConfigRelay)
 	serverConfigE2EE.AddPeer(clientPeerConfigE2EE)
