@@ -128,6 +128,7 @@ func init() {
 				"relay-output",
 				"e2ee-output",
 				"server-output",
+				"simple",
 			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
@@ -326,7 +327,7 @@ func (c configureCmdConfig) Run() {
 		defer file.Close()
 
 		data := []string{
-			peer.CreateServerFile(serverConfigRelay, serverConfigE2EE),
+			peer.CreateServerFile(serverConfigRelay, serverConfigE2EE, c.simple),
 			"# POSIX Shell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple, c.disableV6),
 			"# Powershell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, c.simple, c.disableV6),
 		}
