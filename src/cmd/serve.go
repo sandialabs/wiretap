@@ -316,14 +316,14 @@ func (c serveCmdConfig) Run() {
 
 	// Check for required flags.
 	if !viper.IsSet("Relay.Peer.publickey") && !viper.IsSet("E2EE.Peer.publickey") {
-		check("config error", errors.New("public key of peer is required"))
+		check("config error", errors.New("no peer public keys provided"))
 	}
 
 	if !viper.IsSet("E2EE.Peer.publickey") {
-		fmt.Println("Running Wiretap in simple configuration mode.")
+		fmt.Println("E2EE peer public key missing, running Wiretap in simple mode.")
 		serveCmd.simple = true
 		if !viper.IsSet("Relay.Peer.publickey") {
-			check("config error", errors.New("public key of peer is required"))
+			check("config error", errors.New("public key of Relay peer is required"))
 		}
 	}
 
