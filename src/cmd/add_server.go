@@ -184,7 +184,7 @@ func (c addServerCmdConfig) Run() {
 
 		clientPeerConfigE2EE, err := clientConfigE2EE.AsPeer()
 		check("failed to parse e2ee config as peer", err)
-		if len(addArgs.outboundEndpoint) == 0 {
+		if len(addArgs.endpoint) > 0 {
 			err = clientPeerConfigRelay.SetEndpoint(addArgs.endpoint)
 			check("failed to set endpoint", err)
 
