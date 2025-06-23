@@ -32,7 +32,7 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 
 	addCmd.PersistentFlags().StringVarP(&addCmdArgs.endpoint, "endpoint", "e", addCmdArgs.endpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
-	addCmd.PersistentFlags().StringVarP(&addCmdArgs.outboundEndpoint, "outbound-endpoint", "o", addCmdArgs.outboundEndpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that client will connect to (example \"1.2.3.4:51820\"")
+	addCmd.PersistentFlags().StringVarP(&addCmdArgs.outboundEndpoint, "outbound-endpoint", "o", addCmdArgs.outboundEndpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that client will connect to (example \"4.3.2.1:51820\"")
 
 	addCmd.PersistentFlags().IntVarP(&addCmdArgs.keepalive, "keepalive", "k", addCmdArgs.keepalive, "tunnel keepalive in seconds")
 
