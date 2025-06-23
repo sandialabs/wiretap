@@ -315,8 +315,20 @@ func (c serveCmdConfig) Run() {
 	}
 
 	// Check for required flags.
-	if !viper.IsSet("Relay.Peer.publickey") || (!viper.IsSet("simple") && !viper.IsSet("E2EE.Peer.publickey")) {
-		check("config error", errors.New("public key of peer is required"))
+	if !viper.IsSet("Relay.Peer.publickey") && !viper.IsSet("E2EE.Peer.publickey") {
+		check("config error", errors.New("no peer public keys provided"))
+	}
+
+	if viper.IsSet("E2EE.Peer.publickey") && !viper.IsSet("Relay.Peer.publickey") {
+		check("config error", errors.New("only E2EE public key provided"))
+	}
+
+	if !viper.IsSet("E2EE.Peer.publickey") {
+		fmt.Println("E2EE peer public key missing, running Wiretap in simple mode.")
+		serveCmd.simple = true
+		if !viper.IsSet("Relay.Peer.publickey") {
+			check("config error", errors.New("public key of Relay peer is required"))
+		}
 	}
 
 	if viper.IsSet("disableipv6") && netip.MustParseAddr(viper.GetString("E2EE.Interface.api")).Is6() {
