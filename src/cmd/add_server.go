@@ -233,7 +233,7 @@ func (c addServerCmdConfig) Run() {
 		check("failed to parse e2ee config as peer", err)
 
 		// Assign endpoints if inbound-initiated communication is used.
-		if len(addArgs.outboundEndpoint) == 0 {
+		if len(addArgs.endpoint) > 0 {
 			err = leafServerPeerConfigRelay.SetEndpoint(addArgs.endpoint)
 			check("failed to set endpoint", err)
 
