@@ -84,9 +84,9 @@ func init() {
 
 	configureCmd.Flags().StringSliceVarP(&configureCmdArgs.allowedIPs, "routes", "r", configureCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap (example \"10.0.0.1/24\")")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.endpoint, "endpoint", "e", configureCmdArgs.endpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
-	configureCmd.Flags().StringVarP(&configureCmdArgs.outboundEndpoint, "outbound-endpoint", "o", configureCmdArgs.outboundEndpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that client will connect to (example \"1.2.3.4:51820\"")
-	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for client wireguard relay. Default is to copy the --endpoint port.")
-	configureCmd.Flags().IntVarP(&configureCmdArgs.sport, "sport", "S", configureCmdArgs.sport, "listener port for server wireguard relay. Default is to copy the --outbound-endpoint port.")
+	configureCmd.Flags().StringVarP(&configureCmdArgs.outboundEndpoint, "outbound-endpoint", "o", configureCmdArgs.outboundEndpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that client will connect to (example \"4.3.2.1:51820\"")
+	configureCmd.Flags().IntVarP(&configureCmdArgs.port, "port", "p", configureCmdArgs.port, "listener port for client wireguard relay. Default is to copy the --endpoint port, or fallback to 51820")
+	configureCmd.Flags().IntVarP(&configureCmdArgs.sport, "sport", "S", configureCmdArgs.sport, "listener port for server wireguard relay. Default is to copy the --outbound-endpoint port, or fallback to 51820")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.nickname, "nickname", "n", configureCmdArgs.nickname, "Server nickname to display in 'status' command")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.localhostIP, "localhost-ip", "i", configureCmdArgs.localhostIP, "[EXPERIMENTAL] Redirect wiretap packets destined for this IPv4 address to server's localhost")
 
@@ -110,6 +110,8 @@ func init() {
 
 	err := configureCmd.MarkFlagRequired("routes")
 	check("failed to mark flag required", err)
+	configureCmd.MarkFlagsMutuallyExclusive("endpoint", "outbound-endpoint")
+	configureCmd.MarkFlagsOneRequired("endpoint", "outbound-endpoint")
 
 	configureCmd.Flags().SortFlags = false
 
@@ -189,9 +191,9 @@ func (c configureCmdConfig) Run() {
 
 	// Check for how client and server should connect
 	if c.endpoint == Endpoint && c.outboundEndpoint == Endpoint {
-		check("endpoint error", errors.New("connection between client and server not set"))
+		check("endpoint error", errors.New("must specify either --endpoint or --outbound-endpoint"))
 	} else if len(c.endpoint) > 0 && len(c.outboundEndpoint) > 0 {
-		check("endpoint error", errors.New("conflicting connection configuration"))
+		check("endpoint error", errors.New("cannot set both --endpoint and --outbound-endpoint"))
 	}
 
 	if len(c.endpoint) > 0 {
