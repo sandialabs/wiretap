@@ -319,6 +319,10 @@ func (c serveCmdConfig) Run() {
 		check("config error", errors.New("no peer public keys provided"))
 	}
 
+	if viper.IsSet("E2EE.Peer.publickey") && !viper.IsSet("Relay.Peer.publickey") {
+		check("config error", errors.New("only E2EE public key provided"))
+	}
+
 	if !viper.IsSet("E2EE.Peer.publickey") {
 		fmt.Println("E2EE peer public key missing, running Wiretap in simple mode.")
 		serveCmd.simple = true

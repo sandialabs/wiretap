@@ -342,9 +342,6 @@ func (c configureCmdConfig) Run() {
 
 	// Make config file string
 	serverConfigFile := fmt.Sprintf("./wiretap serve -f %s", c.configFileServer)
-	if c.simple {
-		serverConfigFile = fmt.Sprintf("%s --simple", serverConfigFile)
-	}
 	if c.disableV6 {
 		serverConfigFile = fmt.Sprintf("%s --disable-ipv6", serverConfigFile)
 	}

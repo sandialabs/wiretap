@@ -522,11 +522,7 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 			keys = append(keys, "WIRETAP_E2EE_PEER_ENDPOINT")
 			vals = append(vals, e2eeConfig.GetPeerEndpoint(0))
 		}
-	} else {
-		keys = append(keys, "WIRETAP_SIMPLE")
-		vals = append(vals, "true")
-	}
-
+	} 
 	if disableV6 {
 		keys = append(keys, "WIRETAP_DISABLEIPV6")
 		vals = append(vals, "true")
