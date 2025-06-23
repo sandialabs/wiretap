@@ -130,6 +130,7 @@ func init() {
 				"relay-output",
 				"e2ee-output",
 				"server-output",
+				"simple",
 			} {
 				err := cmd.Flags().MarkHidden(f)
 				if err != nil {
@@ -334,7 +335,7 @@ func (c configureCmdConfig) Run() {
 		defer file.Close()
 
 		data := []string{
-			peer.CreateServerFile(serverConfigRelay, serverConfigE2EE),
+			peer.CreateServerFile(serverConfigRelay, serverConfigE2EE, c.simple),
 			"# POSIX Shell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, c.simple, c.disableV6),
 			"# Powershell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, c.simple, c.disableV6),
 		}
@@ -349,9 +350,6 @@ func (c configureCmdConfig) Run() {
 
 	// Make config file string
 	serverConfigFile := fmt.Sprintf("./wiretap serve -f %s", c.configFileServer)
-	if c.simple {
-		serverConfigFile = fmt.Sprintf("%s --simple", serverConfigFile)
-	}
 	if c.disableV6 {
 		serverConfigFile = fmt.Sprintf("%s --disable-ipv6", serverConfigFile)
 	}
