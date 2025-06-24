@@ -196,23 +196,20 @@ func (c configureCmdConfig) Run() {
 		check("endpoint error", errors.New("cannot set both --endpoint and --outbound-endpoint"))
 	}
 
-	if len(c.endpoint) > 0 {
+	if len(c.endpoint) > 0 && c.port == USE_ENDPOINT_PORT {
 		c.port = portFromEndpoint(c.endpoint)
 	} else if c.port == USE_ENDPOINT_PORT {
 		c.port = Port
 	}
 
-	if len(c.outboundEndpoint) > 0 {
+	if len(c.outboundEndpoint) > 0 && c.sport == USE_ENDPOINT_PORT {
 		c.sport = portFromEndpoint(c.outboundEndpoint)
 	} else if c.sport == USE_ENDPOINT_PORT {
 		c.sport = Port
 	}
 
-	var clientPort int
-	var serverPort int
-
-	clientPort = c.port
-	serverPort = c.sport
+	clientPort := c.port
+	serverPort := c.sport
 
 	err = serverConfigRelay.SetPort(serverPort)
 	check("failed to set port", err)
