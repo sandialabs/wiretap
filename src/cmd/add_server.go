@@ -56,7 +56,7 @@ func init() {
 
 	addServerCmd.Flags().StringSliceVarP(&addServerCmdArgs.allowedIPs, "routes", "r", addServerCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.serverAddress, "server-address", "s", addServerCmdArgs.serverAddress, "API address of server that new server will connect to, connects to client by default")
-	addServerCmd.Flags().IntVarP(&addServerCmdArgs.port, "port", "p", addServerCmdArgs.port, "listener port to start on new server for wireguard relay. If --outbound, default is the port specified in --endpoint; otherwise default is 51820")
+	addServerCmd.Flags().IntVarP(&addServerCmdArgs.port, "port", "p", addServerCmdArgs.port, "listener port to start on new server for wireguard relay. If --outbound-endpoint, default is the port specified in --outbound-endpoint; otherwise default is 51820")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.nickname, "nickname", "n", addServerCmdArgs.nickname, "Server nickname to display in 'status' command")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.localhostIP, "localhost-ip", "i", addServerCmdArgs.localhostIP, "[EXPERIMENTAL] Redirect wiretap packets destined for this IPv4 address to server's localhost")
 	addServerCmd.Flags().BoolVarP(&addServerCmdArgs.writeToClipboard, "clipboard", "c", addServerCmdArgs.writeToClipboard, "copy configuration args to clipboard")
@@ -150,14 +150,14 @@ func (c addServerCmdConfig) Run() {
 				return allowedIPs
 			}(),
 			Endpoint: func() string {
-				if addArgs.outbound {
-					return addArgs.endpoint
+				if len(addArgs.outboundEndpoint) > 0 {
+					return addArgs.outboundEndpoint
 				} else {
 					return ""
 				}
 			}(),
 			PersistentKeepaliveInterval: func() int {
-				if addArgs.outbound {
+				if len(addArgs.outboundEndpoint) > 0 {
 					return addArgs.keepalive
 				} else {
 					return 0
@@ -185,13 +185,11 @@ func (c addServerCmdConfig) Run() {
 		clientPeerConfigE2EE, err := clientConfigE2EE.AsPeer()
 		check("failed to parse e2ee config as peer", err)
 		if len(addArgs.endpoint) > 0 {
-			if !addArgs.outbound {
-				err = clientPeerConfigRelay.SetEndpoint(addArgs.endpoint)
-				check("failed to set endpoint", err)
+			err = clientPeerConfigRelay.SetEndpoint(addArgs.endpoint)
+			check("failed to set endpoint", err)
 
-				err = clientPeerConfigE2EE.SetEndpoint(net.JoinHostPort(clientConfigRelay.GetAddresses()[0].IP.String(), fmt.Sprint(E2EEPort)))
-				check("failed to set endpoint", err)
-			}
+			err = clientPeerConfigE2EE.SetEndpoint(net.JoinHostPort(clientConfigRelay.GetAddresses()[0].IP.String(), fmt.Sprint(E2EEPort)))
+			check("failed to set endpoint", err)
 		}
 		serverConfigRelay.AddPeer(clientPeerConfigRelay)
 		serverConfigE2EE.AddPeer(clientPeerConfigE2EE)
@@ -236,13 +234,11 @@ func (c addServerCmdConfig) Run() {
 
 		// Assign endpoints if inbound-initiated communication is used.
 		if len(addArgs.endpoint) > 0 {
-			if !addArgs.outbound {
-				err = leafServerPeerConfigRelay.SetEndpoint(addArgs.endpoint)
-				check("failed to set endpoint", err)
+			err = leafServerPeerConfigRelay.SetEndpoint(addArgs.endpoint)
+			check("failed to set endpoint", err)
 
-				err = clientPeerConfigE2EE.SetEndpoint(net.JoinHostPort(clientConfigRelay.GetAddresses()[0].IP.String(), fmt.Sprint(E2EEPort)))
-				check("failed to set endpoint", err)
-			}
+			err = clientPeerConfigE2EE.SetEndpoint(net.JoinHostPort(clientConfigRelay.GetAddresses()[0].IP.String(), fmt.Sprint(E2EEPort)))
+			check("failed to set endpoint", err)
 		}
 
 		// Make allowed IPs all of current peer's allowed IPs:
@@ -281,14 +277,14 @@ func (c addServerCmdConfig) Run() {
 			PublicKey:  serverConfigRelay.GetPublicKey(),
 			AllowedIPs: addrs,
 			Endpoint: func() string {
-				if addArgs.outbound {
-					return addArgs.endpoint
+				if len(addArgs.outboundEndpoint) > 0 {
+					return addArgs.outboundEndpoint
 				} else {
 					return ""
 				}
 			}(),
 			PersistentKeepaliveInterval: func() int {
-				if addArgs.outbound {
+				if len(addArgs.outboundEndpoint) > 0 {
 					return addArgs.keepalive
 				} else {
 					return 0
@@ -342,8 +338,8 @@ func (c addServerCmdConfig) Run() {
 
 	// Set port defaults
 	if c.port == USE_ENDPOINT_PORT {
-		if addArgs.outbound { //for outbound, default port is same as endpoint port
-			c.port = portFromEndpoint(addArgs.endpoint)
+		if len(addArgs.outboundEndpoint) > 0 { //for outbound, default port is same as endpoint port
+			c.port = portFromEndpoint(addArgs.outboundEndpoint)
 
 		} else { //for inbound, use a reasonable default for server relay listening port
 			c.port = Port
