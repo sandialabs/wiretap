@@ -51,9 +51,9 @@ func init() {
 	addCmd.AddCommand(addClientCmd)
 
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address of server that new client will connect to. By default new clients connect to existing relay servers")
-	addClientCmd.Flags().IntVarP(&addClientCmdArgs.port, "port", "p", addClientCmdArgs.port, "port of wireguard listener to start; server port if --outbound, client port otherwise. Default is the port specified in --endpoint")
+	addClientCmd.Flags().IntVarP(&addClientCmdArgs.port, "port", "p", addClientCmdArgs.port, "port of wireguard listener to start; server port if --outbound-endpoint, client port otherwise. Default is the port specified in --endpoint")
 	addClientCmd.Flags().IntVarP(&addClientCmdArgs.mtu, "mtu", "m", addClientCmdArgs.mtu, "tunnel MTU")
-	
+
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.outputConfigFileRelay, "relay-output", "", addClientCmdArgs.outputConfigFileRelay, "filename of output relay config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.outputConfigFileE2EE, "e2ee-output", "", addClientCmdArgs.outputConfigFileE2EE, "filename of output E2EE config file")
 	addClientCmd.Flags().StringVarP(&addClientCmdArgs.inputConfigFileRelay, "relay-input", "", addClientCmdArgs.inputConfigFileRelay, "filename of input relay config file")
@@ -61,7 +61,7 @@ func init() {
 
 	addClientCmd.Flags().SortFlags = false
 	addClientCmd.PersistentFlags().SortFlags = false
-	
+
 	helpFunc := addCmd.HelpFunc()
 	addCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if !ShowHidden {
@@ -104,9 +104,13 @@ func (c addClientCmdConfig) Run() {
 	if len(baseConfigE2EE.GetAddresses()) == 1 {
 		disableV6 = true
 	}
-	
+
 	if c.port == USE_ENDPOINT_PORT {
-		c.port = portFromEndpoint(addArgs.endpoint);
+		if len(addArgs.outboundEndpoint) > 0 {
+			c.port = portFromEndpoint(addArgs.outboundEndpoint)
+		} else {
+			c.port = portFromEndpoint(addArgs.endpoint)
+		}
 	}
 
 	// Make new configs for client.
@@ -186,14 +190,14 @@ func (c addClientCmdConfig) Run() {
 			return allowed
 		}(),
 		Endpoint: func() string {
-			if addArgs.outbound {
+			if len(addArgs.outboundEndpoint) > 0 {
 				return ""
 			} else {
 				return addArgs.endpoint
 			}
 		}(),
 		PersistentKeepaliveInterval: func() int {
-			if addArgs.outbound {
+			if len(addArgs.outboundEndpoint) > 0 {
 				return 0
 			} else {
 				return addArgs.keepalive
