@@ -343,7 +343,7 @@ func (c configureCmdConfig) Run() {
 			"# Powershell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, c.simple, c.disableV6),
 		}
 
-		_, err = file.WriteString((strings.Join(data, "\n\n")))
+		_, err = file.WriteString((strings.Join(data, "\n\n")) + "\n")
 		if err != nil {
 			fileStatusServer = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
 		} else {
