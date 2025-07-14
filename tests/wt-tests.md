@@ -443,7 +443,6 @@ COPYCONF
 @ ./wiretap serve -f ./wiretap_server.conf &
 ! wg-quick up ./wiretap_relay.conf >/dev/null 2>&1 && wg-quick up ./wiretap.conf >/dev/null 2>&1
 WAIT 5
-OLD ! ./wiretap add server --server-address ::2 -o 10.2.0.4:8990 --routes 10.3.0.0/16,fd:3::/64 >/dev/null 2>&1
 ! ./wiretap add server --server-address ::2 -e 10.2.0.3:8990 --routes 10.3.0.0/16,fd:3::/64 >/dev/null 2>&1
 COPYCONF
 % ./wiretap serve -f ./wiretap_server1.conf &
@@ -483,7 +482,6 @@ COPYCONF
 @ ./wiretap serve -f ./wiretap_server.conf &
 ! wg-quick up ./wiretap_relay.conf >/dev/null 2>&1 && wg-quick up ./wiretap.conf >/dev/null 2>&1
 WAIT 5
-BAD ! ./wiretap add server --server-address ::2 -o 10.2.0.4:8990 --routes 10.3.0.0/16,fd:3::/64 -p 8976 >/dev/null 2>&1
 ! ./wiretap add server --server-address ::2 -o 10.2.0.4:8990 --routes 10.3.0.0/16,fd:3::/64 >/dev/null 2>&1
 COPYCONF
 % ./wiretap serve -f ./wiretap_server1.conf &
