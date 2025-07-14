@@ -5,7 +5,7 @@ ARG https_proxy
 
 # Utilities for testing
 RUN apt-get update
-RUN apt-get install net-tools nmap dnsutils tcpdump iproute2 vim netcat-openbsd iputils-ping wireguard iperf xsel masscan nano -y
+RUN apt-get install net-tools nmap dnsutils tcpdump iproute2 vim netcat-openbsd iputils-ping wireguard iperf xsel masscan nano less tcpdump socat -y
 
 WORKDIR /wiretap
 COPY ./src/go.mod ./src/go.sum ./
