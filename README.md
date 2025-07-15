@@ -533,6 +533,10 @@ Use `./wiretap expose remove` with the same arguments used in `expose` to delete
     - API internal to Wiretap for dynamic configuration
     - Chain servers together to tunnel traffic through an arbitrary number of machines
     - Add clients after deployment for multi-user support
+    - Option to delete server configuration files after ingestion
+    - Save server CLI commands to the server configuration file
+    - Server auto-detects simple configurations
+    - Client and server ports can be configured separately
 
 # Demo
 
