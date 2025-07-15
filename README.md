@@ -220,7 +220,8 @@ Config File:  ./wiretap serve -f wiretap_server.conf
 ---
 
 > [!NOTE]
-> The 51821 ListenPort in `wiretap.conf` needs to be available for use on the Client, but does NOT need to be accessible to the Server over real-world networks. See the [How It Works](#how-it-works) section for details. Use `--simple` in both the `config` command and the Server's `serve` command if your setup requires a single interface on the Client
+> The 51821 ListenPort in `wiretap.conf` needs to be available for use on the Client, but does NOT need to be accessible to the Server over real-world networks. See the [How It Works](#how-it-works) section for details. Use `--simple` in the `configure` command if your setup requires a single interface on the Client. The Server will auto-detect that configuration. 
+> Setting the server listening port can be done using the `--sport` flag in the `configure` command.
 
 Install the resulting `wiretap_relay.conf` and `wiretap.conf` configs files into WireGuard on the Client:
 
@@ -230,21 +231,15 @@ Install the resulting `wiretap_relay.conf` and `wiretap.conf` configs files into
 > [!TIP]
 > You can modify the AllowedIPs in the `wiretap.conf` file any time after generating the config files, just reload the config file with `wg-quick down ./wiretap.conf && wg-quick up ./wiretap.conf` (or re-import them into the GUI) after making the change. No changes are needed on the Server to update them.
 
-> [!WARNING]
-> In the default configuration, with the Client listening for an initial Server connection, the Server will still also listen on port 51820 so that other Servers can attach to it later. There is currently no way to change this when running the `configure` command, but when running `wiretap serve` you can manually change this in the `wiretap_server.conf` file, or using the `WIRETAP_RELAY_INTERFACE_PORT` environment variable.
-
 Don't forget to disable or remove the tunnels when you're done (e.g., `sudo wg-quick down ./wiretap.conf && sudo wg-quick down ./wiretap_relay.conf`)
 
 ### Outbound Connections
-You can use the `--outbound` flag to configure the Client to Initiate the UDP connection to the Server. If you do, the `--endpoint` value will instead be used to tell the Client where to connect to the Server, and the `--port` value (explicit or implicit) will configure the Server's listening port.
+You can use the `--outbound-endpoint` flag to configure the Client to Initiate the UDP connection to the Server. If you do, the `--outbound-endpoint` value will instead be used to tell the Client where to connect to the Server, and the `--sport` value (explicit or implicit) will configure the Server's listening port.
 
-In this case the Client will listen on 51820 in case other Servers need to be added using the default Inbound mode, but this can be changed via the `ListenPort` variable in the `wiretap_relay.conf` file if needed.
+In this case the Client will listen on 51820 in case other Servers need to be added using the default Inbound mode, but this can be changed by passing a value to the `--port` flag when running the `configure` command.
 
 ### Simple Mode
 While not recommended, you can add the `--simple` flag to configure Wiretap as a more traditional one-Client-and-one-Server VPN. Most of Wiretap's dynamic configuration features (any Wiretap commands you would run after establishing the initial connection) will be unavailable in this mode.
-
-> [!WARNING]
-> When starting the Server, you may need to also use the `--simple` flag. The Server currently does not support automatically detecting this configuration.
 
 ## Serve
 
@@ -314,7 +309,7 @@ If you want to attach a new Server to an existing Server (rather than the Client
 In this example, we will connect to the server that has API address `::2`, which is listening on `10.0.0.2:51820`:
 
 ```bash
-./wiretap add server --server-address ::2 --endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
+./wiretap add server --server-address ::2 --outbound-endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
 ```
 
 
@@ -361,7 +356,7 @@ Config File:  ./wiretap serve -f wiretap_server_1.conf
 
 This command will modify the Client's E2EE configuration (`wiretap.conf`) to allow communication with the new Server, so you need to re-import it. For example, `sudo wg-quick down ./wiretap.conf && sudo wg-quick up ./wiretap.conf`. If you are attaching a new Server directly to the Client, the Relay config will also need to be refreshed in the same way.
 
-Now you can use any of the `serve` command options to start Wiretap on the new Server, just like you did after running the `config` command. It will then join the Wiretap network by connecting to the existing Server.
+Now you can use any of the `serve` command options to start Wiretap on the new Server, just like you did after running the `configure` command. It will then join the Wiretap network by connecting to the existing Server.
 
 At this point the new routes should be usable! You can confirm that everything looks correct with `wiretap status`:
 
@@ -533,10 +528,6 @@ Use `./wiretap expose remove` with the same arguments used in `expose` to delete
     - API internal to Wiretap for dynamic configuration
     - Chain servers together to tunnel traffic through an arbitrary number of machines
     - Add clients after deployment for multi-user support
-    - Option to delete server configuration files after ingestion
-    - Save server CLI commands to the server configuration file
-    - Server auto-detects simple configurations
-    - Client and server ports can be configured separately
 
 # Demo
 
