@@ -542,6 +542,12 @@ Expected Output:
 - wiretap_server.conf : Wiretap Relay Interface Port == 8990
 - wiretap_server.conf : Wiretap Relay Peer Endpoint Port == 51690
 - wiretap_server1.conf : Wiretap Relay Interface Port == 8976
+Expected Ping Output:
+- Client returns at least one line containing the substring "bytes from 10.3.0.5"
+- Server returns line containing substring "Transport: ICMP -> 10.3.0.5"
+Expected Curl Output:
+- Client returns a line containing the substring "200 OK"
+- Server returns line containing substring "Transport: TCP -> 10.3.0.5:80"
 
 
 ### ASCT 4/4
