@@ -67,7 +67,7 @@ A **Wiretap Client** is any machine running the [Wireguard](https://www.wireguar
     * The machine receiving the initial connection (the Client by default) must be able to listen for UDP connections on a port that the initiating machine can connect to.
 
 > [!NOTE]
-> By default the Server initiates the handshake to the Client because the Server is more likely to have outbound UDP allowed through a firewall than inbound UDP, but the reverse is easily configurable.
+> By default the Server initiates the handshake to the Client because the Server is more likely to have outbound UDP allowed through a firewall than inbound UDP, but the reverse is easily configurable with [Outbound Connections](#outbound-connections)
 
 While not ideal, Wiretap can work with TCP instead of UDP. See the experimental [TCP Tunneling](#tcp-tunneling) section for more info.
 
@@ -78,15 +78,15 @@ While not ideal, Wiretap can work with TCP instead of UDP. See the experimental 
 3. Copy the server command output that best suits the Server OS and run it on the Server machine
 4. On the Client, run `sudo wg-quick up ./wiretap_relay.conf && sudo wg-quick up ./wiretap.conf` create the associated Wireguard interfaces
 5. Confirm the handshake completed for both configs by running `sudo wg show` on the Client
-6. (Optional) Add more servers and clients as needed with the `wiretap add` command
+6. (Optional) Add more Servers and Clients as needed with the `wiretap add` command
 
 See the [Usage section](#Usage) for more details.
 
 # Installation
 
-No installation of Wiretap is required. Just grab a binary from the [releases](https://github.com/sandialabs/wiretap/releases) page. You may need two different binaries if the OS/ARCH are different on the client and server machines.
+No installation of Wiretap is required. Just grab a binary from the [releases](https://github.com/sandialabs/wiretap/releases) page. You may need two different binaries if the OS/ARCH are different on the Client and Server machines.
 
-If you want to compile it yourself or can't find the OS/ARCH you're looking for, install Go (>=1.23.3) from https://go.dev/dl/ and use the provided [Makefile](./src/Makefile).
+If you want to compile it yourself or can't find the OS/ARCH you're looking for, install the latest Go from https://go.dev/dl/ and use the provided [Makefile](./src/Makefile).
 
 # How it Works
 
@@ -163,8 +163,7 @@ On the Client machine, run Wiretap's `configure` command to generate starting co
 * `--routes` is the equivalent of WireGuard's `AllowedIPs` setting. This tells the Client to route traffic that matches these IP ranges through Wiretap.
 
 > [!IMPORTANT]
-> By default the listening port will be configured to be the same as the port specified in the `--endpoint IP:port`. This can be overwritten using the `--port` argument.
-> If creating an outbound connection, by default the listening port will be configured to be the same as the port specified in the `--outbound-endpoint IP:port`. This can be overwritten using the `--sport` argument.
+> By default the Client listening port will be the same port specified in the `--endpoint IP:port`. This can be overwritten using the `--port` argument. If creating an outbound connection, the default Server listening port will be the same port specified in the `--outbound-endpoint IP:port` unless overwritten with the `--sport` argument. Both ports otherwise have a default of 51820. 
 
 Following the example in the diagram:
 ```bash
@@ -253,7 +252,7 @@ There are two other ways to pass arguments to the Server:
 2. The legacy method of passing command line arguments (`--endpoint 7.3.3.1:1337 ...`). Be aware that this method exposes the arguments to other users on the system. A compromised private key can be used to connect to the Client as a peer and/or decrypt traffic
 
 > [!NOTE]
-> The wiretap_server.conf file uses a notation unique to Wiretap. It cannot be used to start a server with `wg-quick` or other generic Wireguard tools.
+> The wiretap_server.conf file uses a notation unique to Wiretap. It cannot be used to start a Wireguard server with `wg-quick` or other generic Wireguard tools.
 
 Confirm that the Relay interfaces on the Client and Server have successfully completed a handshake. The Client should see successful handshakes in whatever WireGuard interface is running. If using the command-line tools, check with `sudo wg show`. By default the E2EE handshake will not occur until the Client sends data, so you may need to attempt to use the connection (e.g. `ping` an IP in the associated `--routes`) to trigger the handshake process.
 
@@ -304,9 +303,9 @@ The `add server` command is meant to extend the Wiretap network to reach new are
 > [!WARNING]
 > Due to the way new Clients are added to existing networks, all Servers must be deployed *before* adding additional Clients. Added Clients won't be able to access Servers deployed after they were added. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
 
-If you want to attach a new Server to an existing Server (rather than the Client) you must also specify the existing Server's API address in your `add server` command using the `--server-address` argument; this API address **must** reference the same existing Server that the new Server will connect to via the `--endpoint` IP:port or else the new connection will fail. You can view Server API addresses using the `status` command.
+If you want to attach a new Server to an existing Server (rather than the Client) you must also specify the existing Server's API address in your `add server` command using the `--server-address` argument; this API address **must** reference the same existing Server that the new Server will connect to via the `--endpoint` IP:port (or `--outbound-endpoint`) or else the new connection will fail. You can view existing Server API addresses using the `status` command or by inspecting the configuration files.
 
-In this example, we will connect to the server that has API address `::2`, which is listening on `10.0.0.2:51820`:
+In this example, we will connect to the Server that has API address `::2`, which is listening on `10.0.0.2:51820`:
 
 ```bash
 ./wiretap add server --server-address ::2 --endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
@@ -407,7 +406,7 @@ Now the Client can reach `10.0.0.0/24` and `10.0.1.0/24`. From here you can atta
 The `add client` command can be used to share access to the Wiretap network with others.
 
 > [!WARNING]
-> All servers must be deployed *before* adding additional clients. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
+> All servers must be deployed *before* adding additional Clients. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
 
 Adding a new Client is very similar to the other commands. It will generate a `wiretapX.conf` and `wiretap_relayX.conf` for sharing, where X is an incrementing number. Make sure that all of the first-hop Servers (any Server directly attached to the original Client) can reach or be reached by the new Client or else the new Client won't have access to that chain of Servers. Once you get the endpoint information from whoever will be running the new Client (the IP and port they will listen on), run:
 
@@ -463,7 +462,7 @@ Endpoint = 172.17.0.3:51821
 
 ---
 
-Send these files and have the recipient import them into WireGuard to have access to everything in the Wiretap network! By default the routes (AllowedIPs) are copied over to the new client configs, but can be modified by the recipient as needed.
+Send these files and have the recipient import them into WireGuard to have access to everything in the Wiretap network! By default the routes (AllowedIPs) are copied over to the new Client configs, but can be modified by the recipient as needed.
 
 ## Expose (Port Forwarding)
 
@@ -479,7 +478,7 @@ You can expose a port on the Client to IPs in Wiretap's `routes` list by using t
 Now all existing Wiretap Servers will bind listeners on port 8080/tcp and proxy connections from that port to your local Client machine on port 80/tcp. By default this uses IPv6, so make sure any exposed services listening on the Client support IPv6 as well. To configure Wiretap to only use IPv4, use the `configure` command's `--disable-ipv6` option.
 
 > [!WARNING]
-> If a Wiretap server process exits or dies for any reason it will not remember ports it was previously exposing. You will need to re-expose any ports you configured with this command.
+> If a Wiretap Server process exits or dies for any reason it will not remember ports it was previously exposing. You will need to re-expose any ports you configured with this command.
 
 To dynamically expose all ports on the Client using SOCKS5:
 
@@ -487,7 +486,7 @@ To dynamically expose all ports on the Client using SOCKS5:
 ./wiretap expose --dynamic --remote 8080
 ```
 
-All servers will spin up a SOCKS5 server on port 8080 and proxy traffic to your local machine. It and can be used like this:
+All Servers will spin up a SOCKS5 server on port 8080 and proxy traffic to your local machine. It and can be used like this:
 
 ```
 curl -x socks5://<server-ip>:8080 http://<any-ip>:80
@@ -526,8 +525,9 @@ Use `./wiretap expose remove` with the same arguments used in `expose` to delete
         - Reverse Port Forward
 * Application
     - API internal to Wiretap for dynamic configuration
-    - Chain servers together to tunnel traffic through an arbitrary number of machines
-    - Add clients after deployment for multi-user support
+    - Chain Servers together to tunnel traffic through an arbitrary number of machines
+    - Add Clients after deployment for multi-user support
+    - Access services running on the 127.0.0.1 interface of Servers
 
 # Demo
 
@@ -544,7 +544,7 @@ Sometimes you want to access multiple ports on the Server itself that are bound 
 
 When running the `configure` or `add server` commands, you can specify a `--localhost-ip <IPv4 address>` argument. For example:
 ```bash
-./wiretap configure --endpoint 7.3.3.1:1337 --routes 10.0.0.0/24 -i 192.168.137.137
+./wiretap configure --endpoint 7.3.3.1:1337 --routes 10.0.0.0/24 --localhost-ip 192.168.137.137
 ```
 Any packets received by this Server through the Wiretap network with this target destination address (`192.168.137.137` in this example) will be re-routed to the Server host's `127.0.0.1` loopback address instead, with replies routed back to the Client appropriately. The specified address will also be added as a route (with a `/32` mask) to the Client config file to ensure traffic generated with this destination is routed through the Wiretap network. 
 
@@ -578,6 +578,7 @@ If you have *no* outbound or inbound UDP access, you can still use Wiretap, but 
 >
 > WireGuard explicitly does not support tunneling over TCP, due to the classically terrible network performance of tunneling TCP-over-TCP. Rather, transforming WireGuard's UDP packets into TCP is the job of an upper layer of obfuscation (see previous point), and can be accomplished by projects like [udptunnel](https://github.com/rfc1036/udptunnel) and [udp2raw](https://github.com/wangyu-/udp2raw-tunnel).
 
+### Chisel
 Another great tool that has similar cross-platform capabilities to Wiretap is [Chisel](https://github.com/jpillora/chisel). We can use chisel to forward a UDP port to the remote system over TCP. To use:
 
 Run `chisel server` on the Wiretap Client, specifying a TCP listening port that the Wiretap Server can reach:
@@ -596,11 +597,12 @@ In this example, we're connecting chisel to the listener on 8080 (on the Wiretap
 - `61820` is the localhost port on the Wiretap Server that will be forwarded back to the Wiretap Client.
 - `51820` is the port where the Wiretap Client is listening
 
-Finally, run Wiretap on the remote server system, using the forwarded localhost port in the `--endpoint` argument:
+Finally, start a Wiretap Server on the remote system, using the forwarded localhost port in the `--endpoint` argument:
 ```bash
 WIRETAP_RELAY_INTERFACE_PRIVATEKEY=<key> WIRETAP_RELAY_PEER_PUBLICKEY=<key> WIRETAP_E2EE_INTERFACE_PRIVATEKEY=<key> WIRETAP_E2EE_PEER_PUBLICKEY=<key> WIRETAP_E2EE_PEER_ENDPOINT=172.16.0.1:51821 ./wiretap serve --endpoint localhost:61820
 ```
 
+### SOCAT
 Alternatively, if SOCAT is available on the Server and Client (or a machine that can be reached by them) you can use that to establish a UDP-over-TCP connection.
 
 On the Server:
@@ -618,7 +620,7 @@ Then start the wiretap Server with the `--endpoint localhost:61820` argument.
 ## Add Clients To Any Server
 
 > [!NOTE]
-> Clients added to arbitrary servers do not currently have the same capabilities as clients added to first-hop servers (the default)
+> Clients added to arbitrary Servers do not currently have the same capabilities as Clients added to first-hop Servers (the default)
 
 Clients can be attached to any Server in the network by using the `--server-address <api-address>` argument when running `wiretap add client`. This allows a Client on a different network than the first Client to still gain access to all of the Wiretap network's routes. However, the new Client will not be able to access any Servers that are part of a different chain connected to the first Client.
 
