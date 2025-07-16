@@ -164,6 +164,7 @@ On the Client machine, run Wiretap's `configure` command to generate starting co
 
 > [!IMPORTANT]
 > By default the listening port will be configured to be the same as the port specified in the `--endpoint IP:port`. This can be overwritten using the `--port` argument.
+> If creating an outbound connection, by default the listening port will be configured to be the same as the port specified in the `--outbound-endpoint IP:port`. This can be overwritten using the `--sport` argument.
 
 Following the example in the diagram:
 ```bash
@@ -221,7 +222,6 @@ Config File:  ./wiretap serve -f wiretap_server.conf
 
 > [!NOTE]
 > The 51821 ListenPort in `wiretap.conf` needs to be available for use on the Client, but does NOT need to be accessible to the Server over real-world networks. See the [How It Works](#how-it-works) section for details. Use `--simple` in the `configure` command if your setup requires a single interface on the Client. The Server will auto-detect that configuration. 
-> Setting the server listening port can be done using the `--sport` flag in the `configure` command.
 
 Install the resulting `wiretap_relay.conf` and `wiretap.conf` configs files into WireGuard on the Client:
 
@@ -309,7 +309,7 @@ If you want to attach a new Server to an existing Server (rather than the Client
 In this example, we will connect to the server that has API address `::2`, which is listening on `10.0.0.2:51820`:
 
 ```bash
-./wiretap add server --server-address ::2 --outbound-endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
+./wiretap add server --server-address ::2 --endpoint 10.0.0.2:51820 --routes 10.0.1.0/24
 ```
 
 
