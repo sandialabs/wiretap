@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strings"
 	"time"
+	"regexp"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
@@ -15,6 +16,7 @@ import (
 type PeerConfig struct {
 	config     wgtypes.PeerConfig
 	privateKey *wgtypes.Key
+	endpoint   string
 	nickname   string
 }
 
@@ -170,12 +172,19 @@ func (p *PeerConfig) SetPresharedKey(presharedKey string) error {
 }
 
 func (p *PeerConfig) SetEndpoint(addr string) error {
-	endpoint, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return err
+	host, _, _ := net.SplitHostPort(addr)
+	ip := regexp.MustCompile(`\d`).MatchString(host)
+	if ip {
+		endpoint, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			return err
+		}
+		p.config.Endpoint = endpoint
+		return nil
+	} else {
+		endpoint := addr
+		p.endpoint = endpoint
 	}
-
-	p.config.Endpoint = endpoint
 	return nil
 }
 
@@ -275,6 +284,9 @@ func (p *PeerConfig) AsFile() string {
 	if p.config.Endpoint != nil {
 		s.WriteString(fmt.Sprintf("Endpoint = %s\n", p.config.Endpoint.String()))
 	}
+	if p.endpoint != "" {
+		s.WriteString(fmt.Sprintf("Endpoint = %s\n", p.endpoint))
+	}
 	if p.config.PersistentKeepaliveInterval != nil {
 		s.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", *p.config.PersistentKeepaliveInterval/time.Second))
 	}
@@ -288,6 +300,9 @@ func (p *PeerConfig) AsIPC() string {
 	s.WriteString(fmt.Sprintf("public_key=%s\n", hex.EncodeToString(p.config.PublicKey[:])))
 	if p.config.Endpoint != nil {
 		s.WriteString(fmt.Sprintf("endpoint=%s\n", p.config.Endpoint.String()))
+	}
+	if p.endpoint != "" {
+		s.WriteString(fmt.Sprintf("Endpoint = %s\n", p.endpoint))
 	}
 	for _, a := range p.config.AllowedIPs {
 		s.WriteString(fmt.Sprintf("allowed_ip=%s\n", a.String()))
