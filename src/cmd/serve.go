@@ -357,7 +357,7 @@ func (c serveCmdConfig) Run() {
 				Endpoint: func() string {
 					if len(viper.GetString("Relay.Peer.endpoint")) > 0 {
 						endpoint, err := net.ResolveUDPAddr("udp", (viper.GetString("Relay.Peer.endpoint")))
-						check("failed to resolve endpoint DNS name"+Endpoint, err)
+						check("failed to resolve endpoint DNS name for '" + viper.GetString("Relay.Peer.endpoint") + "'", err)
 						return endpoint.String()
 					} else {
 						return ""
