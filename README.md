@@ -303,7 +303,7 @@ The `add server` command is meant to extend the Wiretap network to reach new are
 > [!WARNING]
 > Due to the way new Clients are added to existing networks, all Servers must be deployed *before* adding additional Clients. Added Clients won't be able to access Servers deployed after they were added. Additionally, if a Wiretap Server process exits or dies for any reason it will not remember any added Clients when you restart it.
 
-If you want to attach a new Server to an existing Server (rather than the Client) you must also specify the existing Server's API address in your `add server` command using the `--server-address` argument; this API address **must** reference the same existing Server that the new Server will connect to via the `--endpoint` IP:port (or `--outbound-endpoint`) or else the new connection will fail. You can view existing Server API addresses using the `status` command or by inspecting the configuration files.
+If you want to attach a new Server to an existing Server (rather than the Client) you must also specify the existing Server's API address in your `add server` command using the `--server-address` argument; this API address **must** reference the same existing Server that the new Server will connect to via the `--endpoint  IP:port` (or `--outbound-endpoint`) or else the new connection will fail. If you configured a nickname for the existing server you can pass that to `--server-address` instead of the API address. You can view existing Server API addresses and nicknames using the `status` command or by inspecting the configuration files.
 
 In this example, we will connect to the Server that has API address `::2`, which is listening on `10.0.0.2:51820`:
 
@@ -622,7 +622,7 @@ Then start the wiretap Server with the `--endpoint localhost:61820` argument.
 > [!NOTE]
 > Clients added to arbitrary Servers do not currently have the same capabilities as Clients added to first-hop Servers (the default)
 
-Clients can be attached to any Server in the network by using the `--server-address <api-address>` argument when running `wiretap add client`. This allows a Client on a different network than the first Client to still gain access to all of the Wiretap network's routes. However, the new Client will not be able to access any Servers that are part of a different chain connected to the first Client.
+Clients can be attached to any Server in the network by using the `--server-address [api-address|nickname]` argument when running `wiretap add client`. This allows a Client on a different network than the first Client to still gain access to all of the Wiretap network's routes. However, the new Client will not be able to access any Servers that are part of a different chain connected to the first Client.
 
 As an example, consider a new Client (C1) that is added to the second server (S3) in the right branch of a Wiretap network. This new Client will only be able to access routes via the right branch of the network (S2 and S3) and not the left branch (S0 or S1) because the branches are only joined through an existing Client (C0). Clients do not route traffic from other Clients.
 
