@@ -8,7 +8,6 @@ import (
 	"net/netip"
 	"strings"
 	"time"
-	"regexp"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
@@ -89,7 +88,7 @@ func GetPeerConfig(args PeerConfigArgs) (PeerConfig, error) {
 			return PeerConfig{}, err
 		}
 	}
-	
+
 	if args.Nickname != "" {
 		err = c.SetNickname(args.Nickname)
 		if err != nil {
@@ -111,7 +110,7 @@ func NewPeerConfig() (PeerConfig, error) {
 			PublicKey: privateKey.PublicKey(),
 		},
 		privateKey: &privateKey,
-		nickname: "",
+		nickname:   "",
 	}, nil
 }
 
@@ -172,18 +171,19 @@ func (p *PeerConfig) SetPresharedKey(presharedKey string) error {
 }
 
 func (p *PeerConfig) SetEndpoint(addr string) error {
-	host, _, _ := net.SplitHostPort(addr)
-	ip := regexp.MustCompile(`^[0-9]+$`).MatchString(host)
-	if ip {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+	ip := net.ParseIP(host)
+	if ip != nil {
 		endpoint, err := net.ResolveUDPAddr("udp", addr)
 		if err != nil {
 			return err
 		}
 		p.config.Endpoint = endpoint
-		return nil
 	} else {
-		endpoint := addr
-		p.endpoint = endpoint
+		p.endpoint = addr
 	}
 	return nil
 }
@@ -267,13 +267,13 @@ func (p *PeerConfig) SetNickname(nickname string) error {
 func (p *PeerConfig) AsFile() string {
 	var s strings.Builder
 	s.WriteString("[Peer]\n")
-	
+
 	if p.nickname != "" {
 		s.WriteString(fmt.Sprintf("%s Nickname = %s\n", CUSTOM_PREFIX, p.nickname))
 	}
-	
+
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", p.config.PublicKey.String()))
-	
+
 	ips := []string{}
 	for _, a := range p.config.AllowedIPs {
 		ips = append(ips, a.String())

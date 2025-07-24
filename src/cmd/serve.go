@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/netip"
 	"os"
 	"slices"
 	"strings"
 	"sync"
 	"time"
-	"net"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -354,10 +354,14 @@ func (c serveCmdConfig) Run() {
 		Peers: []peer.PeerConfigArgs{
 			{
 				PublicKey: viper.GetString("Relay.Peer.publickey"),
-				Endpoint:  func() string {
-					endpoint, err := net.ResolveUDPAddr("udp", (viper.GetString("Relay.Peer.endpoint")))
-					check("failed to resolve DNS", err)
-					return endpoint.String()
+				Endpoint: func() string {
+					if len(viper.GetString("Relay.Peer.endpoint")) > 0 {
+						endpoint, err := net.ResolveUDPAddr("udp", (viper.GetString("Relay.Peer.endpoint")))
+						check("failed to resolve endpoint DNS name"+Endpoint, err)
+						return endpoint.String()
+					} else {
+						return ""
+					}
 				}(),
 				PersistentKeepaliveInterval: func() int {
 					if len(viper.GetString("Relay.Peer.endpoint")) > 0 {
