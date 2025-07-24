@@ -143,6 +143,14 @@ func (c addClientCmdConfig) Run() {
 		}
 	} else {
 		// Get leaf server info
+		ip := net.ParseIP(c.serverAddress)
+		if ip == nil {
+			for idx, peer := range baseConfigE2EE.GetPeers() {
+				if peer.GetNickname() == c.serverAddress {
+					c.serverAddress = baseConfigE2EE.GetPeers()[idx].GetApiAddr().String()
+				}
+			}
+		}
 		leafApiAddr, err := netip.ParseAddr(c.serverAddress)
 		check("invalid server address", err)
 		leafApiAddrPort := netip.AddrPortFrom(leafApiAddr, uint16(ApiPort))
