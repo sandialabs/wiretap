@@ -378,25 +378,16 @@ func (c *Config) GetPeerPublicKey(i int) string {
 
 func (c *Config) GetPeerEndpoint(i int) string {
 	if len(c.peers) > i {
-		if len(c.peers[i].endpoint) > 0 {
-			endpoint := c.peers[i].endpoint
-			if endpoint != "" {
-				return endpoint
-			}
+		endpoint := c.peers[i].endpoint
+		if endpoint != "" {
+			return endpoint
+		}
 
-			return ""
-
-		} else {
-			endpoint := c.peers[i].config.Endpoint
-			if endpoint != nil {
-				return endpoint.String()
-			}
-
-			return ""
+		endpoint := c.peers[i].config.Endpoint
+		if endpoint != nil {
+			return endpoint.String()
 		}
 	}
-
-	return ""
 }
 
 func (c *Config) GetLocalhostIP() string {

@@ -16,6 +16,7 @@ type PeerConfig struct {
 	config     wgtypes.PeerConfig
 	privateKey *wgtypes.Key
 	endpoint   string
+	endpointDNS string
 	nickname   string
 }
 
@@ -23,6 +24,7 @@ type peerConfigJSON struct {
 	Config     wgtypes.PeerConfig
 	PrivateKey *wgtypes.Key
 	Nickname   string
+	EndpointDNS string
 }
 
 type PeerConfigArgs struct {
@@ -119,6 +121,7 @@ func (p *PeerConfig) MarshalJSON() ([]byte, error) {
 		p.config,
 		p.privateKey,
 		p.nickname,
+		p.endpointDNS
 	})
 }
 
@@ -133,6 +136,7 @@ func (p *PeerConfig) UnmarshalJSON(b []byte) error {
 	p.config = tmp.Config
 	p.privateKey = tmp.PrivateKey
 	p.nickname = tmp.Nickname
+	p.endpointDNS = tmp.EndpointDNS
 
 	return nil
 }
