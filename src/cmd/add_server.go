@@ -55,7 +55,7 @@ func init() {
 	addCmd.AddCommand(addServerCmd)
 
 	addServerCmd.Flags().StringSliceVarP(&addServerCmdArgs.allowedIPs, "routes", "r", addServerCmdArgs.allowedIPs, "[REQUIRED] CIDR IP ranges that will be routed through wiretap")
-	addServerCmd.Flags().StringVarP(&addServerCmdArgs.serverAddress, "server-address", "s", addServerCmdArgs.serverAddress, "API address of server that new server will connect to, connects to client by default")
+	addServerCmd.Flags().StringVarP(&addServerCmdArgs.serverAddress, "server-address", "s", addServerCmdArgs.serverAddress, "API address or nickname of server that new server will connect to, connects to client by default")
 	addServerCmd.Flags().IntVarP(&addServerCmdArgs.port, "port", "p", addServerCmdArgs.port, "listener port to start on new server for wireguard relay. If --outbound-endpoint, default is the port specified in --outbound-endpoint; otherwise default is 51820")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.nickname, "nickname", "n", addServerCmdArgs.nickname, "Server nickname to display in 'status' command")
 	addServerCmd.Flags().StringVarP(&addServerCmdArgs.localhostIP, "localhost-ip", "i", addServerCmdArgs.localhostIP, "[EXPERIMENTAL] Redirect wiretap packets destined for this IPv4 address to server's localhost")
