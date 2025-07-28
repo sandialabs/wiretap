@@ -164,6 +164,7 @@ func init() {
 	// Deprecated flags, kept for backwards compatibility.
 	cmd.Flags().StringP("private-relay", "", "", "wireguard private key for relay interface")
 	cmd.Flags().StringP("public-relay", "", "", "wireguard public key of remote peer for relay interface")
+	cmd.Flags().StringP("preshared-relay", "", "", "wireguard preshared key of remote peer for relay interface")
 	cmd.Flags().StringP("private-e2ee", "", "", "wireguard private key for E2EE interface")
 	cmd.Flags().StringP("public-e2ee", "", "", "wireguard public key of remote peer for E2EE interface")
 	cmd.Flags().StringP("endpoint-relay", "", wiretapDefault.endpointRelay, "socket address of remote peer that server will connect to (example \"1.2.3.4:51820\")")
@@ -187,6 +188,8 @@ func init() {
 	check("error binding flag to viper", err)
 
 	err = viper.BindPFlag("Relay.Peer.publickey", cmd.Flags().Lookup("public-relay"))
+	check("error binding flag to viper", err)
+	err = viper.BindPFlag("Relay.Peer.presharedkey", cmd.Flags().Lookup("preshared-relay"))
 	check("error binding flag to viper", err)
 	err = viper.BindPFlag("Relay.Peer.endpoint", cmd.Flags().Lookup("endpoint-relay"))
 	check("error binding flag to viper", err)
@@ -238,6 +241,7 @@ func init() {
 				"ipv6-e2ee-client",
 				"private-relay",
 				"public-relay",
+				"preshared-relay",
 				"private-e2ee",
 				"public-e2ee",
 				"endpoint-relay",
@@ -359,6 +363,13 @@ func (c serveCmdConfig) Run() {
 						return viper.GetInt("Relay.Peer.keepalive")
 					} else {
 						return 0
+					}
+				}(),
+				PresharedKey: func() string {
+					if len(viper.GetString("Relay.Peer.presharedkey")) > 0 {
+						return viper.GetString("Relay.Peer.presharedkey")
+					} else {
+						return ""
 					}
 				}(),
 				AllowedIPs: aips,
