@@ -121,7 +121,7 @@ func (p *PeerConfig) MarshalJSON() ([]byte, error) {
 		p.config,
 		p.privateKey,
 		p.nickname,
-		p.endpointDNS
+		p.endpointDNS,
 	})
 }
 

@@ -382,12 +382,13 @@ func (c *Config) GetPeerEndpoint(i int) string {
 		if endpoint != "" {
 			return endpoint
 		}
-
+	} else {
 		endpoint := c.peers[i].config.Endpoint
 		if endpoint != nil {
 			return endpoint.String()
 		}
 	}
+	return ""
 }
 
 func (c *Config) GetLocalhostIP() string {
