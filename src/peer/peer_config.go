@@ -15,7 +15,6 @@ import (
 type PeerConfig struct {
 	config     wgtypes.PeerConfig
 	privateKey *wgtypes.Key
-	endpoint   string
 	endpointDNS string
 	nickname   string
 }
@@ -187,7 +186,7 @@ func (p *PeerConfig) SetEndpoint(addr string) error {
 		}
 		p.config.Endpoint = endpoint
 	} else {
-		p.endpoint = addr
+		p.endpointDNS = addr
 	}
 	return nil
 }
@@ -288,8 +287,8 @@ func (p *PeerConfig) AsFile() string {
 	if p.config.Endpoint != nil {
 		s.WriteString(fmt.Sprintf("Endpoint = %s\n", p.config.Endpoint.String()))
 	}
-	if p.endpoint != "" {
-		s.WriteString(fmt.Sprintf("Endpoint = %s\n", p.endpoint))
+	if p.endpointDNS != "" {
+		s.WriteString(fmt.Sprintf("Endpoint = %s\n", p.endpointDNS))
 	}
 	if p.config.PersistentKeepaliveInterval != nil {
 		s.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", *p.config.PersistentKeepaliveInterval/time.Second))
@@ -305,8 +304,8 @@ func (p *PeerConfig) AsIPC() string {
 	if p.config.Endpoint != nil {
 		s.WriteString(fmt.Sprintf("endpoint=%s\n", p.config.Endpoint.String()))
 	}
-	if p.endpoint != "" {
-		s.WriteString(fmt.Sprintf("endpoint=%s\n", p.endpoint))
+	if p.endpointDNS != "" {
+		s.WriteString(fmt.Sprintf("endpoint=%s\n", p.endpointDNS))
 	}
 	for _, a := range p.config.AllowedIPs {
 		s.WriteString(fmt.Sprintf("allowed_ip=%s\n", a.String()))

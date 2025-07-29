@@ -378,11 +378,10 @@ func (c *Config) GetPeerPublicKey(i int) string {
 
 func (c *Config) GetPeerEndpoint(i int) string {
 	if len(c.peers) > i {
-		endpoint := c.peers[i].endpoint
-		if endpoint != "" {
-			return endpoint
+		endpointDNS := c.peers[i].endpointDNS
+		if endpointDNS != "" {
+			return endpointDNS
 		}
-	} else {
 		endpoint := c.peers[i].config.Endpoint
 		if endpoint != nil {
 			return endpoint.String()
