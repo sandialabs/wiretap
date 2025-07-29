@@ -289,8 +289,8 @@ func (p *PeerConfig) AsIPC() string {
 	var s strings.Builder
 
 	s.WriteString(fmt.Sprintf("public_key=%s\n", hex.EncodeToString(p.config.PublicKey[:])))
-	if len(p.config.PresharedKey) != 0 {
-		s.WriteString(fmt.Sprintf("preshared_key=%s\n", p.config.PresharedKey.String()))
+	if p.config.PresharedKey != nil {
+		s.WriteString(fmt.Sprintf("preshared_key=%s\n", hex.EncodeToString(p.config.PresharedKey[:])))
 	}
 	if p.config.Endpoint != nil {
 		s.WriteString(fmt.Sprintf("endpoint=%s\n", p.config.Endpoint.String()))

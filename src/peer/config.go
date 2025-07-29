@@ -459,7 +459,7 @@ func (c *Config) AsShareableFile() string {
 
 	s.WriteString("[Peer]\n")
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", c.config.PrivateKey.PublicKey().String()))
-	if len(c.presharedKey) > 0 {
+	if c.presharedKey != nil {
 		s.WriteString(fmt.Sprintf("PresharedKey = %s\n", c.presharedKey.String()))
 	}
 	s.WriteString("AllowedIPs = 0.0.0.0/32\n")
@@ -511,7 +511,7 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 	keys = append(keys, "WIRETAP_RELAY_PEER_PUBLICKEY")
 	vals = append(vals, relayConfig.GetPeerPublicKey(0))
 	
-	if len(relayConfig.GetPresharedKey()) > 0 {
+	if relayConfig.presharedKey != nil {
 		keys = append(keys, "WIRETAP_RELAY_PEER_PRESHAREDKEY")
 		vals = append(vals, relayConfig.GetPresharedKey())
 	}
@@ -615,7 +615,7 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config, simple bool) string
 	}
 
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", relayConfig.GetPeerPublicKey(0)))
-	if len(relayConfig.GetPresharedKey()) > 0 {
+	if relayConfig.presharedKey != nil {
 		s.WriteString(fmt.Sprintf("PresharedKey = %s\n", relayConfig.GetPresharedKey()))
 	}
 	if len(relayConfig.GetPeerEndpoint(0)) > 0 {
