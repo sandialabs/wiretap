@@ -276,10 +276,11 @@ func (p *PeerConfig) AsFile() string {
 	}
 
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", p.config.PublicKey.String()))
-	
+
 	if p.config.PresharedKey != nil {
 		s.WriteString(fmt.Sprintf("PresharedKey = %s\n", p.config.PresharedKey.String()))
 	}
+
 	ips := []string{}
 	for _, a := range p.config.AllowedIPs {
 		ips = append(ips, a.String())
