@@ -218,7 +218,10 @@ func (c addServerCmdConfig) Run() {
 			if duplicate[c.serverAddress] >= 2 {
 				fmt.Println("Error. There are multiple servers with the nickname "+c.serverAddress)
 				fmt.Printf("Please provide the API address of the server: ")
-				fmt.Scan(&c.serverAddress)
+				_, err := fmt.Scan(&c.serverAddress)
+				if err != nil {
+					check("error reading input", err)
+				}
 			} else {
 				c.serverAddress = clientConfigE2EE.GetPeers()[i].GetApiAddr().String()
 			}
