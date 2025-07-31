@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/netip"
 	"os"
 	"slices"
@@ -357,7 +358,15 @@ func (c serveCmdConfig) Run() {
 		Peers: []peer.PeerConfigArgs{
 			{
 				PublicKey: viper.GetString("Relay.Peer.publickey"),
-				Endpoint:  viper.GetString("Relay.Peer.endpoint"),
+				Endpoint: func() string {
+					if len(viper.GetString("Relay.Peer.endpoint")) > 0 {
+						endpoint, err := net.ResolveUDPAddr("udp", (viper.GetString("Relay.Peer.endpoint")))
+						check("failed to resolve endpoint DNS name for '" + viper.GetString("Relay.Peer.endpoint") + "'", err)
+						return endpoint.String()
+					} else {
+						return ""
+					}
+				}(),
 				PersistentKeepaliveInterval: func() int {
 					if len(viper.GetString("Relay.Peer.endpoint")) > 0 {
 						return viper.GetInt("Relay.Peer.keepalive")

@@ -50,7 +50,7 @@ var addClientCmd = &cobra.Command{
 func init() {
 	addCmd.AddCommand(addClientCmd)
 
-	addClientCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address of server that new client will connect to. By default new clients connect to existing relay servers")
+	addClientCmd.Flags().StringVarP(&addClientCmdArgs.serverAddress, "server-address", "s", addClientCmdArgs.serverAddress, "API address or nickname of server that new client will connect to. By default new clients connect to existing relay servers")
 	addClientCmd.Flags().IntVarP(&addClientCmdArgs.port, "port", "p", addClientCmdArgs.port, "port of wireguard listener to start; server port if --outbound-endpoint, client port otherwise. Default is the port specified in --endpoint")
 	addClientCmd.Flags().IntVarP(&addClientCmdArgs.mtu, "mtu", "m", addClientCmdArgs.mtu, "tunnel MTU")
 

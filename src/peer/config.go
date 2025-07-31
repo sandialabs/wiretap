@@ -283,7 +283,11 @@ func (c* Config) GenPresharedKey() error {
 }
 
 func (c* Config) GetPresharedKey() string {
-	return c.presharedKey.String()
+	if c.presharedKey != nil {
+		return c.presharedKey.String()
+	} else {
+		return ""
+	}
 }
 
 func (c *Config) SetPort(port int) error {
@@ -398,14 +402,15 @@ func (c *Config) GetPeerPublicKey(i int) string {
 
 func (c *Config) GetPeerEndpoint(i int) string {
 	if len(c.peers) > i {
+		endpointDNS := c.peers[i].endpointDNS
+		if endpointDNS != "" {
+			return endpointDNS
+		}
 		endpoint := c.peers[i].config.Endpoint
 		if endpoint != nil {
 			return endpoint.String()
 		}
-
-		return ""
 	}
-
 	return ""
 }
 
