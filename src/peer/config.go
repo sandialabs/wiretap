@@ -19,6 +19,7 @@ type Config struct {
 	peers       []PeerConfig
 	addresses   []net.IPNet
 	localhostIP string
+	presharedKey *wgtypes.Key
 }
 
 type configJSON struct {
@@ -27,6 +28,7 @@ type configJSON struct {
 	Peers       []PeerConfig
 	Addresses   []net.IPNet
 	LocalhostIP string
+	PresharedKey *wgtypes.Key
 }
 
 type ConfigArgs struct {
@@ -38,6 +40,7 @@ type ConfigArgs struct {
 	Peers        []PeerConfigArgs
 	Addresses    []string
 	LocalhostIP  string
+	PresharedKey string
 }
 
 type Shell uint
@@ -193,6 +196,8 @@ func ParseConfig(filename string) (c Config, err error) {
 					err = newPeer.SetAllowedIPs(strings.Split(value, ","))
 				case "publickey":
 					err = newPeer.SetPublicKey(value)
+				case "presharedkey":
+					err = newPeer.SetPresharedKey(value)
 				case "persistentkeepalive":
 					keepalive, e := strconv.Atoi(value)
 					if e != nil {
@@ -233,6 +238,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		c.peers,
 		c.addresses,
 		c.localhostIP,
+		c.presharedKey,
 	})
 }
 
@@ -248,6 +254,7 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 	c.peers = tmp.Peers
 	c.addresses = tmp.Addresses
 	c.localhostIP = tmp.LocalhostIP
+	c.presharedKey = tmp.PresharedKey
 
 	return nil
 }
@@ -264,6 +271,23 @@ func (c *Config) SetPrivateKey(privateKey string) error {
 
 func (c *Config) GetPrivateKey() string {
 	return c.config.PrivateKey.String()
+}
+
+func (c* Config) GenPresharedKey() error {
+	key, err := wgtypes.GenerateKey()
+	if err != nil {
+		return err
+	}
+	c.presharedKey = &key
+	return nil
+}
+
+func (c* Config) GetPresharedKey() string {
+	if c.presharedKey != nil {
+		return c.presharedKey.String()
+	} else {
+		return ""
+	}
 }
 
 func (c *Config) SetPort(port int) error {
@@ -440,6 +464,9 @@ func (c *Config) AsShareableFile() string {
 
 	s.WriteString("[Peer]\n")
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", c.config.PrivateKey.PublicKey().String()))
+	if c.presharedKey != nil {
+		s.WriteString(fmt.Sprintf("PresharedKey = %s\n", c.presharedKey.String()))
+	}
 	s.WriteString("AllowedIPs = 0.0.0.0/32\n")
 
 	return s.String()
@@ -488,6 +515,11 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 	// Relay Peer.
 	keys = append(keys, "WIRETAP_RELAY_PEER_PUBLICKEY")
 	vals = append(vals, relayConfig.GetPeerPublicKey(0))
+	
+	if relayConfig.presharedKey != nil {
+		keys = append(keys, "WIRETAP_RELAY_PEER_PRESHAREDKEY")
+		vals = append(vals, relayConfig.GetPresharedKey())
+	}
 
 	if len(relayConfig.peers) > 0 && len(relayConfig.peers[0].config.AllowedIPs) > 0 {
 		keys = append(keys, "WIRETAP_RELAY_PEER_ALLOWED")
@@ -588,6 +620,9 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config, simple bool) string
 	}
 
 	s.WriteString(fmt.Sprintf("PublicKey = %s\n", relayConfig.GetPeerPublicKey(0)))
+	if relayConfig.presharedKey != nil {
+		s.WriteString(fmt.Sprintf("PresharedKey = %s\n", relayConfig.GetPresharedKey()))
+	}
 	if len(relayConfig.GetPeerEndpoint(0)) > 0 {
 		s.WriteString(fmt.Sprintf("Endpoint = %s\n", relayConfig.GetPeerEndpoint(0)))
 	}
