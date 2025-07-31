@@ -205,16 +205,24 @@ func (c addServerCmdConfig) Run() {
 		check("failed to set addresses", err)
 	} else {
 		// Get leaf server info
+		var i int
+		duplicate := make(map[string]int)
 		ip := net.ParseIP(c.serverAddress)
 		if ip == nil {
-			fmt.Println("Server Nickname: "+c.serverAddress)
 			for idx, peer := range clientConfigE2EE.GetPeers() {
 				if peer.GetNickname() == c.serverAddress {
-					c.serverAddress = clientConfigE2EE.GetPeers()[idx].GetApiAddr().String()
+					duplicate[peer.GetNickname()]++
+					i = idx
 				}
 			}
+			if duplicate[c.serverAddress] >= 2 {
+				fmt.Println("Error. There are multiple servers with the nickname "+c.serverAddress)
+				fmt.Printf("Please provide the API address of the server: ")
+				fmt.Scan(&c.serverAddress)
+			} else {
+				c.serverAddress = clientConfigE2EE.GetPeers()[i].GetApiAddr().String()
+			}
 		}
-		fmt.Println("Server API: "+c.serverAddress)
 		leafApiAddr, err := netip.ParseAddr(c.serverAddress)
 		check("invalid server address", err)
 		leafApiAddrPort := netip.AddrPortFrom(leafApiAddr, uint16(ApiPort))
