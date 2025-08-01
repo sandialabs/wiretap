@@ -143,12 +143,20 @@ func (c addClientCmdConfig) Run() {
 		}
 	} else {
 		// Get leaf server info
+		var i int
+		duplicate := make(map[string]int)
 		ip := net.ParseIP(c.serverAddress)
 		if ip == nil {
 			for idx, peer := range baseConfigE2EE.GetPeers() {
 				if peer.GetNickname() == c.serverAddress {
-					c.serverAddress = baseConfigE2EE.GetPeers()[idx].GetApiAddr().String()
+					duplicate[peer.GetNickname()]++
+					i = idx
 				}
+			}
+			if duplicate[c.serverAddress] >= 2 {
+				check("failed to resolve API address", errors.New("there are multiple servers with the nickname "+c.serverAddress))
+			} else {
+				c.serverAddress = baseConfigE2EE.GetPeers()[i].GetApiAddr().String()
 			}
 		}
 		leafApiAddr, err := netip.ParseAddr(c.serverAddress)
