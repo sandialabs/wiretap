@@ -4,7 +4,7 @@ go 1.23.1
 
 toolchain go1.23.3
 
-replace golang.zx2c4.com/wireguard => github.com/Aptimex/wireguard-go v0.0.0-20250714170051-ccac7091943d
+replace golang.zx2c4.com/wireguard => github.com/sandialabs/wireguard-go v0.0.0-20250714170051-ccac7091943d
 
 require (
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
