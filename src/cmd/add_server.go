@@ -142,6 +142,16 @@ func (c addServerCmdConfig) Run() {
 		// Add new server as relay peer.
 		serverRelayPeer, err := peer.GetPeerConfig(peer.PeerConfigArgs{
 			PublicKey: serverConfigRelay.GetPublicKey(),
+			PresharedKey: func() string {
+				if addArgs.generatePSK {
+					err := serverConfigRelay.GenPresharedKey()
+					check("failed to generate preshared key", err)
+					return serverConfigRelay.GetPresharedKey()
+				} else {
+					return ""
+				}
+			}(),
+			Nickname: c.nickname,
 			AllowedIPs: func() []string {
 				allowedIPs := []string{}
 				for _, prefix := range newRelayPrefixes {
