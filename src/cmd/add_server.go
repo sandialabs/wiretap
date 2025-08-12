@@ -151,7 +151,6 @@ func (c addServerCmdConfig) Run() {
 					return ""
 				}
 			}(),
-			Nickname: c.nickname,
 			AllowedIPs: func() []string {
 				allowedIPs := []string{}
 				for _, prefix := range newRelayPrefixes {
