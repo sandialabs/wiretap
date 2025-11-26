@@ -23,8 +23,10 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	"gvisor.dev/gvisor/pkg/tcpip/transport/raw"
 	gtcp "gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	gudp "gvisor.dev/gvisor/pkg/tcpip/transport/udp"
+	gicmp "gvisor.dev/gvisor/pkg/tcpip/transport/icmp"
 
 	"wiretap/peer"
 	"wiretap/transport/api"
@@ -452,10 +454,17 @@ func (c serveCmdConfig) Run() {
 		relayAddrs = append(relayAddrs, apiAddr)
 	}
 
-	tunRelay, tnetRelay, err := netstack.CreateNetTUN(
+	opts := stack.Options{
+		NetworkProtocols:         []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
+		TransportProtocols:       []stack.TransportProtocolFactory{gtcp.NewProtocol, gudp.NewProtocol, gicmp.NewProtocol6, gicmp.NewProtocol4},
+		RawFactory:               raw.EndpointFactory{},
+		AllowPacketEndpointWrite: true,
+	}
+	tunRelay, tnetRelay, err := netstack.CreateNetTUNwithOptions(
 		relayAddrs,
 		[]netip.Addr{},
 		viper.GetInt("Relay.Interface.mtu"),
+		opts,
 	)
 	check("failed to create relay TUN", err)
 
@@ -488,10 +497,11 @@ func (c serveCmdConfig) Run() {
 		}
 
 		if !viper.GetBool("simple") {
-			tunE2EE, tnetE2EE, err = netstack.CreateNetTUN(
+			tunE2EE, tnetE2EE, err = netstack.CreateNetTUNwithOptions(
 				e2eeAddrs,
 				[]netip.Addr{},
 				viper.GetInt("Relay.Interface.mtu")-80,
+				opts,
 			)
 			check("failed to create E2EE TUN", err)
 		}
