@@ -533,7 +533,8 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 				}
 
 				// Bind successful, expose port.
-				go transport.ForwardUdpPort(
+				//go transport.ForwardUdpPort(
+				go transport.ForwardUdpPortWithTracking(
 					tnet.Stack(),
 					c,
 					localAddr,
