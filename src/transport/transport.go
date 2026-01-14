@@ -140,24 +140,28 @@ func SendPacket(s *stack.Stack, packet []byte, addr *tcpip.FullAddress, netProto
 }
 
 func Proxy(src net.Conn, dst net.Conn) {
+	defer src.Close()
+	defer dst.Close()
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		_, err := io.Copy(src, dst)
 		if err != nil {
 			log.Printf("error copying between connections: %v\n", err)
 		}
-		src.Close()
-		wg.Done()
 	}()
 
 	// Copy from peer to new connection.
-	_, nerr := io.Copy(dst, src)
-	if nerr != nil {
-		log.Printf("error copying between connections: %v\n", nerr)
-	}
-	dst.Close()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, nerr := io.Copy(dst, src)
+		if nerr != nil {
+			log.Printf("error copying between connections: %v\n", nerr)
+		}
+	}()
 
 	// Wait for both copies to finish.
 	wg.Wait()
@@ -292,7 +296,6 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 	var connTrack = make(map[netip.AddrPort]*gonet.UDPConn)
 	var ctLock sync.Mutex
 	var newConn = make(chan netip.AddrPort)
-	var stop = false //trigger to shut down all goroutines
 
 	// Sanity check that we can create a connection to the target client port
 	_, err := gonet.DialUDP(
@@ -312,22 +315,14 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 	go func() {
 		buf := make([]byte, bufSize)
 		for {
-			if stop {
-				log.Printf("Stop received in UDP Listener routine\n")
-				conn.Close()
-				close(newConn)
-				break
-			}
-
 			n, addr, err := conn.ReadFromUDPAddrPort(buf)
 			if err != nil {
-				// This conn gets closed to signal that the forwarder is being stopped
+				// This conn gets closed when the forward is removed
 				log.Println("conn closed:", err)
-				stop = true
-				close(newConn)
+				close(newConn) //signal the other goroutines to shut down
 				break
 			}
-			log.Printf("Read %d bytes from UDP listener\n", n)
+			//log.Printf("Read %d bytes from UDP listener\n", n)
 			
 			ctLock.Lock()
 			clientConn, exists := connTrack[addr]
@@ -356,7 +351,7 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 				newConn <- addr
 			}
 
-			log.Printf("Forwarding %d UDP bytes from %v to %v\n", n, addr, clientConn.RemoteAddr())
+			//log.Printf("Forwarding %d UDP bytes from %v to %v\n", n, addr, clientConn.RemoteAddr())
 			_, err = clientConn.Write(buf[:n])
 			if err != nil {
 				log.Println("failed to forward UDP packet to client:", err)
@@ -371,7 +366,7 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 	var stoppers []chan int
 	for {
 		ncAddr, ok := <- newConn
-		if stop || !ok {
+		if !ok {
 			log.Printf("Stop received in new connection handler\n")
 			log.Printf("Sending stop signals to %d routines\n", len(stoppers))
 			// Send stop signals to all return packet routines
@@ -395,6 +390,28 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 		// Spawn new routine to handle return packets (from client)
 		wg.Add(1)
 		go func() {
+			// Find the target address associated with this response
+			var targetAddr netip.AddrPort
+			var found = false
+			for k, v := range connTrack {
+				if v == clientConn {
+					targetAddr = k
+					found = true
+					break
+				}
+			}
+			
+			if !found {
+				log.Println("mapping for UDP response to remote target not found, closing connection")
+				clientConn.Close()
+
+				ctLock.Lock()
+				delete(connTrack, ncAddr)
+				ctLock.Unlock()
+				wg.Done()
+				return
+			}
+
 			for {
 				buf := make([]byte, bufSize)
 
@@ -414,7 +431,7 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 				// Stopper or Read() result will both be handled without one blocking the other
 				select {
 				case <-stopper:
-					log.Printf("Stop received in goroutine for %v\n", clientConn.RemoteAddr())
+					log.Printf("Stop received in goroutine for %v -> %v\n", clientConn.RemoteAddr(), targetAddr)
 					wg.Done()
 					return
 
@@ -435,30 +452,9 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 
 					n = result.(int)
 				}
-				log.Printf("Read %d bytes from UDP client\n", n)
+				//log.Printf("Read %d bytes from UDP client\n", n)
 
-				// Find the target address associated with this response
-				var targetAddr netip.AddrPort
-				var found = false
-				for k, v := range connTrack {
-					if v == clientConn {
-						targetAddr = k
-						found = true
-						break
-					}
-				}
-				
-				if !found {
-					log.Println("mapping for UDP response to remote target not found, closing connection")
-					clientConn.Close()
-
-					ctLock.Lock()
-					delete(connTrack, ncAddr)
-					ctLock.Unlock()
-					break
-				}
-				
-				log.Printf("Forwarding %d UDP bytes from %v to %v\n", n, clientConn.RemoteAddr(), targetAddr)
+				//log.Printf("Forwarding %d UDP bytes from %v to %v\n", n, clientConn.RemoteAddr(), targetAddr)
 				_, err := conn.WriteToUDPAddrPort(buf[:n], targetAddr)
 				if err != nil {
 					log.Println("failed to send client UDP response:", err)
