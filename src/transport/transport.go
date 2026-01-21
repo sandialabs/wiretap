@@ -171,7 +171,6 @@ func Proxy(src net.Conn, dst net.Conn) {
 // ForwardTcpPort proxies TCP connections by accepting connections and proxying them back to the client.
 func ForwardTcpPort(s *stack.Stack, l net.Listener, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
 	ctx, cancel := context.WithCancel(context.Background())
-
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -212,10 +211,6 @@ func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddre
 	var lock sync.Mutex
 
 	const bufSize = 65535
-
-	log.Printf("UDP Forwarder. Local %v; Remote %v", localAddr, remoteAddr)
-	// wiretap expose -l 6666 -p tcp
-	// UDP Forwarder. Local {1 ::2 0 }; Remote {1 fd:19::1 6666 }
 
 	// Connect to forwarded port.
 	nc, err := gonet.DialUDP(
