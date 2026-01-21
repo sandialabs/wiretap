@@ -11,7 +11,6 @@ import (
 	"net/netip"
 	"strconv"
 	"sync"
-	//"time"
 
 	"github.com/armon/go-socks5"
 	"github.com/google/gopacket"
@@ -144,6 +143,8 @@ func Proxy(src net.Conn, dst net.Conn) {
 	defer dst.Close()
 	var wg sync.WaitGroup
 
+	//log.Printf("Proxying between %v <-> %v and %v <-> %v\n", src.LocalAddr(), src.RemoteAddr(), dst.LocalAddr(), dst.RemoteAddr())
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -170,10 +171,6 @@ func Proxy(src net.Conn, dst net.Conn) {
 // ForwardTcpPort proxies TCP connections by accepting connections and proxying them back to the client.
 func ForwardTcpPort(s *stack.Stack, l net.Listener, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
 	ctx, cancel := context.WithCancel(context.Background())
-	log.Printf("TCP Forwarder. Local %v; Remote %v", localAddr, remoteAddr)
-	// wiretap expose -l 6666 -p tcp
-	// TCP Forwarder. Local {1 ::2 0 }; Remote {1 fd:19::1 6666 }
-	
 
 	for {
 		conn, err := l.Accept()
@@ -181,6 +178,8 @@ func ForwardTcpPort(s *stack.Stack, l net.Listener, localAddr tcpip.FullAddress,
 			cancel()
 			return
 		}
+
+		log.Printf("(client [%v]:%v) <- Expose: TCP <- %v", remoteAddr.Addr, remoteAddr.Port, conn.RemoteAddr().String())
 
 		// Proxy between conns.
 		go func() {
@@ -206,6 +205,7 @@ func ForwardTcpPort(s *stack.Stack, l net.Listener, localAddr tcpip.FullAddress,
 
 // ForwardUdpPort proxies UDP datagrams by forwarding datagrams to a peer, and then returns responses to the last remote address to talk to this endpoint.
 // No connection tracking is in place at this time.
+// DEPRECATED. Use ForwardUdpPortWithTracking instead.
 func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
 	var wg sync.WaitGroup
 	var clientAddr *netip.AddrPort
@@ -279,17 +279,14 @@ func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddre
 	wg.Wait()
 }
 
-// ForwardUdpPortWithTracking proxies UDP datagrams by forwarding datagrams to a peer. All connections are tracked so that the client responses are sent to the correct sender, if the exposed service supports doing that. 
+// ForwardUdpPortWithTracking proxies UDP datagrams by forwarding datagrams to and from a peer. All connections are tracked so that the client responses are sent to the correct sender, if the exposed service supports doing that. 
 // Services that don't support that (like 'ncat -lvnup') will only receive and respond to the first endpoint they get a packet from, and must be restarted to talk to a different endpoint. 
-// Currently there is no mechanism for timing out tracked connections, they will remain tracked in memory until the forward is removed
-// BUG: The first packet sent by an endpoint is never received by the client. 
+// Currently there is no mechanism for timing out tracked connections, they will remain tracked in memory until the forward is removed. 
+//
+// "conn" is the listening socket on the "real" network. 
+// "LocalAddr" should be the API listener for this server inside Wiretap's network (src), but port 0 (so a random ephemeral port is assigned).
+// "remoteAddr" is the Client's IP(v6) address and port in Wiretap's network (dst)
 func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
-	//Connection tracking has been tested to ensure that basic use cases work, and that all traffic forwards immediately stop once the Wiretap forward is stopped via 'expose remove'
-	// There are likely other edge cases that are not handled perfectly
-
-	// "LocalAddr" is the API listener for this server in Wiretap's network (src), but port 0; "remoteAddr" is the Client's IP(v6) in Wiretap's network (dst)
-	// conn is the listening socket on the "real" network
-
 	var wg sync.WaitGroup
 	const bufSize = 65535
 	
@@ -317,7 +314,7 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 		for {
 			n, addr, err := conn.ReadFromUDPAddrPort(buf)
 			if err != nil {
-				// This conn gets closed when the forward is removed
+				// This "listener" gets closed when the forward is removed via API
 				log.Println("conn closed:", err)
 				close(newConn) //signal the other goroutines to shut down
 				break
@@ -327,9 +324,9 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 			ctLock.Lock()
 			clientConn, exists := connTrack[addr]
 			ctLock.Unlock()
+
+			// If this connection is not already being tracked, set it up
 			if !exists { 
-				// New connection to forwarded port (with random/unique source port)
-				log.Printf("New UDP connection detected\n")
 				clientConn, err = gonet.DialUDP(
 					s,
 					&localAddr,
@@ -338,8 +335,6 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 				)
 				if err != nil {
 					log.Println("failed to establish new proxy conn:", err)
-					//conn.Close()
-					//break
 					continue
 				}
 
@@ -347,7 +342,7 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 				connTrack[addr] = clientConn
 				ctLock.Unlock()
 
-				// This blocks until it gets picked up by the next code block
+				// This blocks until it gets picked up by the next code block that sets up the response handler routine
 				newConn <- addr
 			}
 
@@ -357,22 +352,20 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 				log.Println("failed to forward UDP packet to client:", err)
 				continue
 			}
-
 		}
 		wg.Done()
 	}()
 
-	// Process new connections to handle return (outgoing) packets
-	var stoppers []chan int
+	// Process new connections to setup routines that handle return (outgoing) packets
 	for {
 		ncAddr, ok := <- newConn
 		if !ok {
-			log.Printf("Stop received in new connection handler\n")
-			log.Printf("Sending stop signals to %d routines\n", len(stoppers))
-			// Send stop signals to all return packet routines
-			for _, s := range stoppers {
-				s <- 1
+			ctLock.Lock()
+			for _, c := range connTrack {
+				c.Close()
 			}
+			ctLock.Unlock()
+
 			break
 		}
 
@@ -384,78 +377,28 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 			continue
 		}
 
-		stopper := make(chan int, 1) // Buffered so it doesn't block on send
-		stoppers = append(stoppers, stopper)
+		//log.Printf("New UDP connection detected\n")
+		log.Printf("(client %v) <- Expose: UDP <- %v", clientConn.RemoteAddr().String(), ncAddr.String())
 
 		// Spawn new routine to handle return packets (from client)
 		wg.Add(1)
-		go func() {
-			// Find the target address associated with this response
-			var targetAddr netip.AddrPort
-			var found = false
-			for k, v := range connTrack {
-				if v == clientConn {
-					targetAddr = k
-					found = true
-					break
-				}
-			}
-			
-			if !found {
-				log.Println("mapping for UDP response to remote target not found, closing connection")
-				clientConn.Close()
-
-				ctLock.Lock()
-				delete(connTrack, ncAddr)
-				ctLock.Unlock()
-				wg.Done()
-				return
-			}
+		go func(targetAddr netip.AddrPort) {
+			buf := make([]byte, bufSize)
 
 			for {
-				buf := make([]byte, bufSize)
+				n, err := clientConn.Read(buf)
+				if err != nil {
+					log.Println("client response conn closed:", err)
+					clientConn.Close()
 
-				// Turn the blocking Read() call into a channel that we can switch on
-				// That way we can immediately exit the routine even when it's blocking
-				readChan := make(chan any)
-				var n int
-				go func() {
-					numBytes, err := clientConn.Read(buf)
-					if err == nil {
-						readChan <- numBytes
-					} else {
-						readChan <- err
-					}
-				}()
-
-				// Stopper or Read() result will both be handled without one blocking the other
-				select {
-				case <-stopper:
-					log.Printf("Stop received in goroutine for %v -> %v\n", clientConn.RemoteAddr(), targetAddr)
-					wg.Done()
-					return
-
-				case result := <- readChan:
-					// Since it can return error or int, need to handle both
-					switch result.(type) {
-					case error:
-						log.Println("client response conn closed:", result)
-						clientConn.Close()
-
-						ctLock.Lock()
-						delete(connTrack, ncAddr)
-						ctLock.Unlock()
-
-						wg.Done()
-						return
-					}
-
-					n = result.(int)
+					ctLock.Lock()
+					delete(connTrack, targetAddr)
+					ctLock.Unlock()
+					break
 				}
-				//log.Printf("Read %d bytes from UDP client\n", n)
 
 				//log.Printf("Forwarding %d UDP bytes from %v to %v\n", n, clientConn.RemoteAddr(), targetAddr)
-				_, err := conn.WriteToUDPAddrPort(buf[:n], targetAddr)
+				_, err = conn.WriteToUDPAddrPort(buf[:n], targetAddr)
 				if err != nil {
 					log.Println("failed to send client UDP response:", err)
 					continue
@@ -463,11 +406,11 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 
 			}
 			wg.Done()
-		}()
+		}(ncAddr)
 	}
 
 	wg.Wait()
-	log.Println("Forward successfully shut down")
+	log.Printf("All routines for UDP forward %v successfully shut down\n", conn.LocalAddr().String())
 }
 
 // ForwardTcpPort proxies TCP connections by accepting connections and proxying them back to the client.
