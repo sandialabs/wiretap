@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/armon/go-socks5"
 	"github.com/google/gopacket"
@@ -39,6 +40,7 @@ type ConnCounts struct {
 }
 
 var connCounts ConnCounts
+const UDP_TIMEOUT = 60 * time.Second
 
 func init() {
 	connCounts.counts = make(map[netip.Addr]int)
@@ -274,117 +276,145 @@ func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddre
 	wg.Wait()
 }
 
-// ForwardUdpPortWithTracking proxies UDP datagrams by forwarding datagrams to and from a peer. All connections are tracked so that the client responses are sent to the correct sender, if the exposed service supports doing that. 
-// Services that don't support that (like 'ncat -lvnup') will only receive and respond to the first endpoint they get a packet from, and must be restarted to talk to a different endpoint. 
-// Currently there is no mechanism for timing out tracked connections, they will remain tracked in memory until the forward is removed. 
+// ForwardUdpPortWithTracking proxies UDP datagrams by forwarding datagrams to and from a peer. All connections are tracked so that the client responses can be sent to the correct sender
 //
-// "conn" is the listening socket on the "real" network. 
+// "conn" is the listening socket on the "real" network (the port being forwarded). 
 // "LocalAddr" should be the API listener for this server inside Wiretap's network (src), but port 0 (so a random ephemeral port is assigned).
 // "remoteAddr" is the Client's IP(v6) address and port in Wiretap's network (dst)
 func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
 	var wg sync.WaitGroup
 	const bufSize = 65535
-	
-	var connTrack = make(map[netip.AddrPort]*gonet.UDPConn)
+	type trackedConn struct {
+		udpConn    *gonet.UDPConn
+		lastActive time.Time
+	}
+	var connTrack = make(map[netip.AddrPort]*trackedConn)
+
 	var ctLock sync.Mutex
 	var newConn = make(chan netip.AddrPort)
 
 	// Sanity check that we can create a connection to the target client port
-	_, err := gonet.DialUDP(
-		s,
-		&localAddr,
-		&remoteAddr,
-		np,
-	)
+	_, err := gonet.DialUDP(s, &localAddr, &remoteAddr, np)
 	if err != nil {
-		log.Println("failed to proxy conn:", err)
+		log.Println("failed to proxy UDP conn:", err)
 		conn.Close()
 		return
 	}
 
-	// Process incoming packets (new or existing "connections")
+	
+	// Watchdog: periodically check for idle connections
+	var stopWatchdog = make(chan bool)
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				expire := time.Now().Add(-1 * UDP_TIMEOUT)
+				ctLock.Lock()
+				for addr, clientConn := range connTrack {
+					if clientConn.lastActive.Before(expire) {
+						log.Printf("Closing idle UDP forward: (client %v) <- Expose: UDP <- %v", clientConn.udpConn.RemoteAddr().String(), addr.String())
+						clientConn.udpConn.Close()
+						delete(connTrack, addr)
+					}
+				}
+				ctLock.Unlock()
+			case <-stopWatchdog:
+				return
+			}
+		}
+	}()
+
+	// Process incoming packets (new or existing “connections”)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		buf := make([]byte, bufSize)
+
 		for {
 			n, addr, err := conn.ReadFromUDPAddrPort(buf)
 			if err != nil {
 				// This "listener" gets closed when the forward is removed via API
 				log.Println("conn closed:", err)
 				close(newConn) //signal the other goroutines to shut down
-				break
+				stopWatchdog <-true
+
+				ctLock.Lock()
+				for _, t := range connTrack {
+					t.udpConn.Close()
+				}
+				ctLock.Unlock()
+				
+				return
 			}
-			//log.Printf("Read %d bytes from UDP listener\n", n)
-			
+
 			ctLock.Lock()
 			clientConn, exists := connTrack[addr]
 			ctLock.Unlock()
-
-			// If this connection is not already being tracked, set it up
-			if !exists { 
-				clientConn, err = gonet.DialUDP(
-					s,
-					&localAddr,
-					&remoteAddr,
-					np,
-				)
+			if !exists {
+				// If this connection is not already being tracked, set it up
+				udpConn, err := gonet.DialUDP(s, &localAddr, &remoteAddr, np)
 				if err != nil {
 					log.Println("failed to establish new proxy conn:", err)
 					continue
 				}
-
+				clientConn = &trackedConn{udpConn: udpConn, lastActive: time.Now()}
 				ctLock.Lock()
 				connTrack[addr] = clientConn
 				ctLock.Unlock()
 
-				// This blocks until it gets picked up by the next code block that sets up the response handler routine
+				// This blocks until it gets picked up by the response handler routine below
 				newConn <- addr
+
+			} else {
+				clientConn.lastActive = time.Now()
 			}
 
-			//log.Printf("Forwarding %d UDP bytes from %v to %v\n", n, addr, clientConn.RemoteAddr())
-			_, err = clientConn.Write(buf[:n])
+			// Forward payload to the client
+			// We currently have no way to capture Dest Unreachable ICMP here, so the first Write() will never fail due to that. 
+			// But the network stack will remember them, so the second Write() will fail and trigger the cleanup. 
+			_, err = clientConn.udpConn.Write(buf[:n])
 			if err != nil {
 				log.Println("failed to forward UDP packet to client:", err)
+				clientConn.udpConn.Close()
 				continue
 			}
 		}
-		wg.Done()
 	}()
 
-	// Process new connections to setup routines that handle return (outgoing) packets
+	// Process new connections – set up routines that handle return (outgoing) packets
 	for {
-		ncAddr, ok := <- newConn
+		ncAddr, ok := <-newConn
 		if !ok {
-			ctLock.Lock()
-			for _, c := range connTrack {
-				c.Close()
-			}
-			ctLock.Unlock()
-
 			break
 		}
 
 		ctLock.Lock()
 		clientConn, exists := connTrack[ncAddr]
 		ctLock.Unlock()
-		if ! exists {
+		if !exists {
 			log.Printf("new UDP forward connection %v marked for processing but not found\n", ncAddr)
 			continue
 		}
 
-		//log.Printf("New UDP connection detected\n")
-		log.Printf("(client %v) <- Expose: UDP <- %v", clientConn.RemoteAddr().String(), ncAddr.String())
+		clientRemoteAddr := clientConn.udpConn.RemoteAddr().String()
+		log.Printf("(client %v) <- Expose: UDP <- %v", clientRemoteAddr, ncAddr.String())
 
-		// Spawn new routine to handle return packets (from client)
+		// Spawn routine to forward responses back to the original sender
 		wg.Add(1)
 		go func(targetAddr netip.AddrPort) {
+			defer wg.Done()
 			buf := make([]byte, bufSize)
 
 			for {
-				n, err := clientConn.Read(buf)
+				n, err := clientConn.udpConn.Read(buf)
 				if err != nil {
-					log.Println("client response conn closed:", err)
-					clientConn.Close()
+					log.Printf("response conn closed: (client %v) <- Expose: UDP <- %v : %s", clientRemoteAddr, targetAddr.String(), err)
+					clientConn.udpConn.Close()
 
 					ctLock.Lock()
 					delete(connTrack, targetAddr)
@@ -392,17 +422,21 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 					break
 				}
 
-				//log.Printf("Forwarding %d UDP bytes from %v to %v\n", n, clientConn.RemoteAddr(), targetAddr)
+				ctLock.Lock()
+				if t, ok := connTrack[targetAddr]; ok {
+					t.lastActive = time.Now()
+				}
+				ctLock.Unlock()
+
 				_, err = conn.WriteToUDPAddrPort(buf[:n], targetAddr)
 				if err != nil {
 					log.Println("failed to send client UDP response:", err)
 					continue
 				}
-
 			}
-			wg.Done()
 		}(ncAddr)
 	}
+
 
 	wg.Wait()
 	log.Printf("All routines for UDP forward %v successfully shut down\n", conn.LocalAddr().String())

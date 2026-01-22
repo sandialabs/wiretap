@@ -201,7 +201,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 		sourceMapDecrement(conn.Source)
 	}()
 
-	err = newConn.SetDeadline(time.Now().Add(30 * time.Second))
+	err = newConn.SetDeadline(time.Now().Add(transport.UDP_TIMEOUT))
 	if err != nil {
 		log.Println("failed to set deadline", err)
 	}
@@ -229,7 +229,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 			}
 
 			// Reset timer, we got a packet.
-			err = newConn.SetDeadline(time.Now().Add(30 * time.Second))
+			err = newConn.SetDeadline(time.Now().Add(transport.UDP_TIMEOUT))
 			if err != nil {
 				log.Println("failed to set deadline:", err)
 			}
@@ -260,7 +260,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 		}
 
 		// Reset timer, we got a packet.
-		err = newConn.SetDeadline(time.Now().Add(30 * time.Second))
+		err = newConn.SetDeadline(time.Now().Add(transport.UDP_TIMEOUT))
 		if err != nil {
 			log.Println("failed to set deadline:", err)
 		}
