@@ -198,6 +198,15 @@ func (c addClientCmdConfig) Run() {
 	// Make peer configs to populate server peers.
 	clientPeerConfigRelay, err := peer.GetPeerConfig(peer.PeerConfigArgs{
 		PublicKey: clientConfigRelay.GetPublicKey(),
+		PresharedKey: func() string {
+			if addArgs.generatePSK {
+				err := clientConfigRelay.GenPresharedKey()
+				check("failed to generate preshared key", err)
+				return clientConfigRelay.GetPresharedKey()
+			} else {
+				return ""
+			}
+		}(),
 		AllowedIPs: func() []string {
 			allowed := []string{}
 			for _, prefix := range clientConfigRelay.GetAddresses() {
