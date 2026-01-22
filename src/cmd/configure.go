@@ -91,7 +91,7 @@ func init() {
 	configureCmd.Flags().IntVarP(&configureCmdArgs.sport, "sport", "S", configureCmdArgs.sport, "listener port for server wireguard relay. Default is to copy the --outbound-endpoint port, or fallback to 51820")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.nickname, "nickname", "n", configureCmdArgs.nickname, "Server nickname to display in 'status' command")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.localhostIP, "localhost-ip", "i", configureCmdArgs.localhostIP, "[EXPERIMENTAL] Redirect wiretap packets destined for this IPv4 address to server's localhost")
-	configureCmd.Flags().BoolVarP(&configureCmdArgs.generatePSK, "PSK", "K", configureCmdArgs.generatePSK, "generates a preshared key")
+	configureCmd.Flags().BoolVarP(&configureCmdArgs.generatePSK, "PSK", "K", configureCmdArgs.generatePSK, "configure a random preshared key; currently only applies to first-hop relay connections")
 
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileRelay, "relay-output", "", configureCmdArgs.configFileRelay, "wireguard relay config output filename")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.configFileE2EE, "e2ee-output", "", configureCmdArgs.configFileE2EE, "wireguard E2EE config output filename")
