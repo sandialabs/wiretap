@@ -51,6 +51,8 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
     environment:
     - DISPLAY=host.docker.internal:0
+    volumes: 
+      - ./src:/wiretap-live/
   server: 
     depends_on: 
       - client 
@@ -71,6 +73,8 @@ services:
       - net.ipv6.conf.all.disable_ipv6=0
     environment:
     - DISPLAY=host.docker.internal:0
+    volumes: 
+      - ./src:/wiretap-live/
   target:
     depends_on: 
       - client 
@@ -87,6 +91,8 @@ services:
       - SYS_MODULE
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
+    volumes: 
+    - ./src:/wiretap-live/
   target2:
     depends_on: 
       - client 
@@ -100,6 +106,8 @@ services:
       - SYS_MODULE
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
+    volumes: 
+      - ./src:/wiretap-live/
 
 
 networks:

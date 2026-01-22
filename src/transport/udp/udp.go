@@ -57,8 +57,6 @@ type Config struct {
 // TODO: Clean this up. Can't use UDPForwarder because it doesn't offer a way to return false, which is required to send Unreachables.
 func Handler(c Config) func(stack.TransportEndpointID, *stack.PacketBuffer) bool {
 	return func(teid stack.TransportEndpointID, pkb *stack.PacketBuffer) bool {
-		log.Printf("(client %s) - Transport: UDP -> %s", net.JoinHostPort(teid.RemoteAddress.String(), fmt.Sprint(teid.RemotePort)), net.JoinHostPort(teid.LocalAddress.String(), fmt.Sprint(teid.LocalPort)))
-
 		packetClone := pkb.Clone()
 		go func() {
 			newPacket(packetClone, c.Tnet.Stack())
@@ -129,7 +127,7 @@ func getDataFromPacket(packet *stack.PacketBuffer) []byte {
 	return transHeader.Payload()
 }
 
-// NewPacket handles every new packet and sending it to the proper UDP dialer.
+// NewPacket handles every new packet and sends it to the proper UDP dialer.
 func newPacket(packet *stack.PacketBuffer, s *stack.Stack) {
 	netHeader := packet.Network()
 	transHeader := header.UDP(netHeader.Payload())
@@ -160,6 +158,7 @@ func newPacket(packet *stack.PacketBuffer, s *stack.Stack) {
 	pktChan = make(chan *stack.PacketBuffer, 1)
 	connMapWrite(conn, pktChan)
 
+	log.Printf("(client %v) - Transport: UDP -> %v", source, dest)
 	go handleConn(conn, port, s)
 
 	pktChan <- packet.Clone()
@@ -202,7 +201,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 		sourceMapDecrement(conn.Source)
 	}()
 
-	err = newConn.SetDeadline(time.Now().Add(30 * time.Second))
+	err = newConn.SetDeadline(time.Now().Add(transport.UDP_TIMEOUT))
 	if err != nil {
 		log.Println("failed to set deadline", err)
 	}
@@ -230,7 +229,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 			}
 
 			// Reset timer, we got a packet.
-			err = newConn.SetDeadline(time.Now().Add(30 * time.Second))
+			err = newConn.SetDeadline(time.Now().Add(transport.UDP_TIMEOUT))
 			if err != nil {
 				log.Println("failed to set deadline:", err)
 			}
@@ -261,7 +260,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 		}
 
 		// Reset timer, we got a packet.
-		err = newConn.SetDeadline(time.Now().Add(30 * time.Second))
+		err = newConn.SetDeadline(time.Now().Add(transport.UDP_TIMEOUT))
 		if err != nil {
 			log.Println("failed to set deadline:", err)
 		}

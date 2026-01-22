@@ -23,10 +23,10 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
 	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	gicmp "gvisor.dev/gvisor/pkg/tcpip/transport/icmp"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/raw"
 	gtcp "gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 	gudp "gvisor.dev/gvisor/pkg/tcpip/transport/udp"
-	gicmp "gvisor.dev/gvisor/pkg/tcpip/transport/icmp"
 
 	"wiretap/peer"
 	"wiretap/transport/api"
