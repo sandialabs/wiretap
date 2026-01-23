@@ -557,6 +557,9 @@ func (c serveCmdConfig) Run() {
 
 		configureLocalhostForwarding(localhostAddr, s)
 
+		// The UDP handler needs to know the localhost IP for proper connection mapping.
+		udp.LocalhostIP = localhostAddr
+
 		if localhostAddr.IsLoopback() {
 			fmt.Printf("=== WARNING: %s is a loopback IP. It will probably not work for Localhost Forwarding ===\n", localhostAddr.String())
 
