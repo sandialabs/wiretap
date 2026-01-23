@@ -3,7 +3,6 @@
 package udp
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -411,7 +410,7 @@ func sendUnreachable(packet *stack.PacketBuffer, s *stack.Stack) {
 		}
 
 		// The IPTables DNAT rule does not properly apply to these ICMP return packets, need to manually fake source IP in two places
-		if LocalhostIP.IsValid() && bytes.Equal(ipv4Layer.DstIP, net.ParseIP("127.0.0.1").To4()) {
+		if LocalhostIP.IsValid() && ipv4Layer.DstIP.Equal(net.ParseIP("127.0.0.1").To4()) {
 			fakeSource = true
 		}
 
