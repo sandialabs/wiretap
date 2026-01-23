@@ -48,6 +48,8 @@ var sourceMapLock = sync.RWMutex{}
 var connMap = make(map[udpConn](chan *stack.PacketBuffer))
 var connMapLock = sync.RWMutex{}
 
+var LocalhostIP netip.Addr
+
 type Config struct {
 	Tnet      *netstack.Net
 	StackLock *sync.Mutex
@@ -276,6 +278,12 @@ func sendResponse(conn udpConn, data []byte, s *stack.Stack) {
 	var err error
 	var ipv4Layer *layers.IPv4
 	var ipv6Layer *layers.IPv6
+	var fakeSource bool = false
+
+	// The IPTables DNAT rule does not properly apply to UDP return packets for some reason, need to manually fake source IP.
+	if LocalhostIP.IsValid() && conn.Dest.Addr() == netip.MustParseAddr("127.0.0.1") {
+		fakeSource = true
+	}
 
 	udpLayer := &layers.UDP{
 		SrcPort: layers.UDPPort(conn.Dest.Port()),
@@ -296,7 +304,13 @@ func sendResponse(conn udpConn, data []byte, s *stack.Stack) {
 		ipv4Layer = &layers.IPv4{
 			Version: 4,
 			//IHL: 5,
-			SrcIP:    conn.Dest.Addr().AsSlice(),
+			SrcIP:    func () []byte {
+				if fakeSource {
+					return LocalhostIP.AsSlice()
+				} else {
+					return conn.Dest.Addr().AsSlice()
+				}
+			}(),
 			DstIP:    conn.Source.Addr().AsSlice(),
 			Protocol: layers.IPProtocolUDP,
 			TTL:      64,
