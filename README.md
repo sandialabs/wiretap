@@ -27,7 +27,7 @@ In this diagram, the Client has generated and installed WireGuard configuration 
 		- [Outbound Connections](#outbound-connections)
 		- [Simple Mode](#simple-mode)
 	- [Serve](#serve)
-  - [Status](#status)
+	- [Status](#status)
 	- [Add Server (Optional)](#add-server-optional)
 	- [Add Client (Optional)](#add-client-optional)
 	- [Expose (Port Forwarding)](#expose-port-forwarding)

@@ -48,6 +48,8 @@ var sourceMapLock = sync.RWMutex{}
 var connMap = make(map[udpConn](chan *stack.PacketBuffer))
 var connMapLock = sync.RWMutex{}
 
+var LocalhostIP netip.Addr
+
 type Config struct {
 	Tnet      *netstack.Net
 	StackLock *sync.Mutex
@@ -276,6 +278,12 @@ func sendResponse(conn udpConn, data []byte, s *stack.Stack) {
 	var err error
 	var ipv4Layer *layers.IPv4
 	var ipv6Layer *layers.IPv6
+	var fakeSource bool = false
+
+	// The IPTables DNAT rule does not properly apply to UDP return packets for some reason, need to manually fake source IP.
+	if LocalhostIP.IsValid() && conn.Dest.Addr() == netip.MustParseAddr("127.0.0.1") {
+		fakeSource = true
+	}
 
 	udpLayer := &layers.UDP{
 		SrcPort: layers.UDPPort(conn.Dest.Port()),
@@ -296,7 +304,13 @@ func sendResponse(conn udpConn, data []byte, s *stack.Stack) {
 		ipv4Layer = &layers.IPv4{
 			Version: 4,
 			//IHL: 5,
-			SrcIP:    conn.Dest.Addr().AsSlice(),
+			SrcIP:    func () []byte {
+				if fakeSource {
+					return LocalhostIP.AsSlice()
+				} else {
+					return conn.Dest.Addr().AsSlice()
+				}
+			}(),
 			DstIP:    conn.Source.Addr().AsSlice(),
 			Protocol: layers.IPProtocolUDP,
 			TTL:      64,
@@ -349,6 +363,7 @@ func sendUnreachable(packet *stack.PacketBuffer, s *stack.Stack) {
 	var ipv4Layer *layers.IPv4
 	var ipv6Layer *layers.IPv6
 	var icmpLayer []byte
+	var fakeSource bool = false
 
 	defer packet.DecRef()
 	netHeader := packet.Network()
@@ -385,6 +400,7 @@ func sendUnreachable(packet *stack.PacketBuffer, s *stack.Stack) {
 			},
 		}).Marshal(nil)
 		ipv6Layer.Length = uint16(len(icmpLayer))
+
 	} else {
 		ipv4Layer = &layers.IPv4{}
 		ipv4Layer, err = transport.GetNetworkLayer[header.IPv4](netHeader, ipv4Layer)
@@ -392,19 +408,37 @@ func sendUnreachable(packet *stack.PacketBuffer, s *stack.Stack) {
 			log.Println("could not decode Network header:", err)
 			return
 		}
+
+		// The IPTables DNAT rule does not properly apply to these ICMP return packets, need to manually fake source IP in two places
+		if LocalhostIP.IsValid() && ipv4Layer.DstIP.Equal(net.ParseIP("127.0.0.1").To4()) {
+			fakeSource = true
+		}
+
 		ipv4Layer = &layers.IPv4{
 			Version:  4,
 			IHL:      5,
-			SrcIP:    ipv4Layer.DstIP,
+			SrcIP:    func () []byte {
+				if fakeSource {
+					return LocalhostIP.AsSlice()
+				} else {
+					return ipv4Layer.DstIP
+				}
+			}(),
 			DstIP:    ipv4Layer.SrcIP,
 			Protocol: layers.IPProtocolICMPv4,
 			TTL:      64,
 		}
+
+		if fakeSource {
+			dest := tcpip.AddrFrom4Slice(LocalhostIP.AsSlice())
+			netHeader.SetDestinationAddress(dest)
+		}
 		ipv4Header, ok := netHeader.(header.IPv4)
 		if !ok {
-			log.Println("could not type assert IPv6 Network Header")
+			log.Println("could not type assert IPv4 Network Header")
 			return
 		}
+
 		icmpLayer, err = (&neticmp.Message{
 			Type: netipv4.ICMPTypeDestinationUnreachable,
 			Code: layers.ICMPv4CodePort,
