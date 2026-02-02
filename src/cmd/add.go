@@ -10,6 +10,7 @@ type addCmdConfig struct {
 	endpoint         string
 	outboundEndpoint string
 	keepalive        int
+	generatePSK      bool
 }
 
 // Defaults for add command.
@@ -18,6 +19,7 @@ var addCmdArgs = addCmdConfig{
 	endpoint:         Endpoint,
 	outboundEndpoint: Endpoint,
 	keepalive:        Keepalive,
+	generatePSK:      false,
 }
 
 // addCmd represents the add command.
@@ -33,6 +35,7 @@ func init() {
 
 	addCmd.PersistentFlags().StringVarP(&addCmdArgs.endpoint, "endpoint", "e", addCmdArgs.endpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that server will connect to (example \"1.2.3.4:51820\")")
 	addCmd.PersistentFlags().StringVarP(&addCmdArgs.outboundEndpoint, "outbound-endpoint", "o", addCmdArgs.outboundEndpoint, "IP:PORT (or [IP]:PORT for IPv6) of wireguard listener that client will connect to (example \"4.3.2.1:51820\"")
+	addCmd.PersistentFlags().BoolVarP(&addCmdArgs.generatePSK, "PSK", "K", addCmdArgs.generatePSK, "configure a random preshared key; currently only applies to first-hop relay connections")
 
 	addCmd.PersistentFlags().IntVarP(&addCmdArgs.keepalive, "keepalive", "k", addCmdArgs.keepalive, "tunnel keepalive in seconds")
 
