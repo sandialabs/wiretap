@@ -562,10 +562,11 @@ iptables -t nat -A PREROUTING -p tcp -d <IPv4 address> -j DNAT --to-destination 
 ```
 
 Limitations:
-- Currently this only works for TCP connections, and only for an IPv4 target address. 
-	- Unfortunately there's [not a clean way](https://serverfault.com/a/975890) to do NAT to the IPv6 `::1` loopback address, so this feature can't be used to access services listening exclusively on that IPv6 address. 
-- This feature does not provide access to other IPs in the 127.0.0.0/8 space. 
-- Added Clients currently won't have the redirection IPs automatically added to their routes. 
+- This only works for an IPv4 target address. 
+	- Unfortunately there's [not a clean way](https://serverfault.com/a/975890) to do NAT to the IPv6 `::1` loopback address, so this feature can't be used to access services listening exclusively on that IPv6 address.
+- ICMP is not supported, only TCP and UDP traffic. 
+- This feature does not provide access to services listening on other IPs in the 127.0.0.0/8 space. 
+- Added Clients won't have the redirection IPs automatically added to their routes. 
 
 
 ## TCP Tunneling
