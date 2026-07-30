@@ -40,6 +40,7 @@ type ConnCounts struct {
 }
 
 var connCounts ConnCounts
+
 const UDP_TIMEOUT = 60 * time.Second
 
 func init() {
@@ -141,8 +142,8 @@ func SendPacket(s *stack.Stack, packet []byte, addr *tcpip.FullAddress, netProto
 }
 
 func Proxy(src net.Conn, dst net.Conn) {
-	defer src.Close()
-	defer dst.Close()
+	defer func() { _ = src.Close() }()
+	defer func() { _ = dst.Close() }()
 	var wg sync.WaitGroup
 
 	//log.Printf("Proxying between %v <-> %v and %v <-> %v\n", src.LocalAddr(), src.RemoteAddr(), dst.LocalAddr(), dst.RemoteAddr())
@@ -195,7 +196,7 @@ func ForwardTcpPort(s *stack.Stack, l net.Listener, localAddr tcpip.FullAddress,
 			)
 			if err != nil {
 				log.Println("failed to proxy conn:", err)
-				conn.Close()
+				_ = conn.Close()
 				return
 			}
 
@@ -223,7 +224,7 @@ func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddre
 	)
 	if err != nil {
 		log.Println("failed to proxy conn:", err)
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
@@ -234,7 +235,7 @@ func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddre
 		for {
 			n, addr, err := conn.ReadFromUDPAddrPort(buf)
 			if err != nil {
-				nc.Close()
+				_ = nc.Close()
 				log.Println("conn closed:", err)
 				break
 			}
@@ -255,7 +256,7 @@ func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddre
 		n, err := nc.Read(buf)
 		if err != nil {
 			log.Println("conn closed:", err)
-			conn.Close()
+			_ = conn.Close()
 			break
 		}
 		lock.Lock()
@@ -278,7 +279,7 @@ func ForwardUdpPort(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddre
 
 // ForwardUdpPortWithTracking proxies UDP datagrams by forwarding datagrams to and from a peer. All connections are tracked so that the client responses can be sent to the correct sender
 //
-// "conn" is the listening socket on the "real" network (the port being forwarded). 
+// "conn" is the listening socket on the "real" network (the port being forwarded).
 // "LocalAddr" should be the API listener for this server inside Wiretap's network (src), but port 0 (so a random ephemeral port is assigned).
 // "remoteAddr" is the Client's IP(v6) address and port in Wiretap's network (dst)
 func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcpip.FullAddress, remoteAddr tcpip.FullAddress, np tcpip.NetworkProtocolNumber) {
@@ -297,11 +298,10 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 	_, err := gonet.DialUDP(s, &localAddr, &remoteAddr, np)
 	if err != nil {
 		log.Println("failed to proxy UDP conn:", err)
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
-	
 	// Watchdog: periodically check for idle connections
 	var stopWatchdog = make(chan bool)
 	wg.Add(1)
@@ -318,7 +318,7 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 				for addr, clientConn := range connTrack {
 					if clientConn.lastActive.Before(expire) {
 						log.Printf("Closing idle UDP forward: (client %v) <- Expose: UDP <- %v", clientConn.udpConn.RemoteAddr().String(), addr.String())
-						clientConn.udpConn.Close()
+						_ = clientConn.udpConn.Close()
 						delete(connTrack, addr)
 					}
 				}
@@ -341,14 +341,14 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 				// This "listener" gets closed when the forward is removed via API
 				log.Println("conn closed:", err)
 				close(newConn) //signal the other goroutines to shut down
-				stopWatchdog <-true
+				stopWatchdog <- true
 
 				ctLock.Lock()
 				for _, t := range connTrack {
-					t.udpConn.Close()
+					_ = t.udpConn.Close()
 				}
 				ctLock.Unlock()
-				
+
 				return
 			}
 
@@ -375,12 +375,12 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 			}
 
 			// Forward payload to the client
-			// We currently have no way to capture Dest Unreachable ICMP here, so the first Write() will never fail due to that. 
-			// But the network stack will remember them, so the second Write() will fail and trigger the cleanup. 
+			// We currently have no way to capture Dest Unreachable ICMP here, so the first Write() will never fail due to that.
+			// But the network stack will remember them, so the second Write() will fail and trigger the cleanup.
 			_, err = clientConn.udpConn.Write(buf[:n])
 			if err != nil {
 				log.Println("failed to forward UDP packet to client:", err)
-				clientConn.udpConn.Close()
+				_ = clientConn.udpConn.Close()
 				continue
 			}
 		}
@@ -414,7 +414,7 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 				n, err := clientConn.udpConn.Read(buf)
 				if err != nil {
 					log.Printf("response conn closed: (client %v) <- Expose: UDP <- %v : %s", clientRemoteAddr, targetAddr.String(), err)
-					clientConn.udpConn.Close()
+					_ = clientConn.udpConn.Close()
 
 					ctLock.Lock()
 					delete(connTrack, targetAddr)
@@ -436,7 +436,6 @@ func ForwardUdpPortWithTracking(s *stack.Stack, conn *net.UDPConn, localAddr tcp
 			}
 		}(ncAddr)
 	}
-
 
 	wg.Wait()
 	log.Printf("All routines for UDP forward %v successfully shut down\n", conn.LocalAddr().String())

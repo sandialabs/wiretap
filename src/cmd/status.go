@@ -89,13 +89,13 @@ func (cc statusCmdConfig) Run() {
 
 	// Don't need to do anything with values, just need to loop the same number of times
 	for range e2ee_peer_list {
-		responseNode := <- nodeChannel
+		responseNode := <-nodeChannel
 
 		if responseNode.error == "" {
 			nodes[responseNode.relayConfig.GetPublicKey()] = responseNode
 		} else {
 			errorNodes = append(errorNodes, responseNode)
-		}	
+		}
 	}
 
 	// Build tree by adding each relay node as a child.
@@ -143,24 +143,24 @@ func (cc statusCmdConfig) Run() {
 			}
 
 			nodeString := fmt.Sprintf(
-`server
+				`server
  nickname: %v 
     relay: %v... 
      e2ee: %v... 
    
       api: %v 
-   routes: %v `, 
-   				c.peerConfig.GetNickname(), 
-   				c.relayConfig.GetPublicKey()[:8], 
-				c.e2eeConfig.GetPublicKey()[:8], 
-				api, 
+   routes: %v `,
+				c.peerConfig.GetNickname(),
+				c.relayConfig.GetPublicKey()[:8],
+				c.e2eeConfig.GetPublicKey()[:8],
+				api,
 				strings.Join(ips, ","),
 			)
 
 			if c.relayConfig.GetLocalhostIP() != "" {
 				nodeString += "\n lhost IP: " + c.relayConfig.GetLocalhostIP()
 			}
-			
+
 			if cc.networkInfo {
 				nodeString += `
 
@@ -186,12 +186,12 @@ Network Interfaces:
 	treeTraversal(&client, child)
 
 	fmt.Println()
-	fmt.Fprintln(color.Output, WhiteBold(t))
+	_, _ = fmt.Fprintln(color.Output, WhiteBold(t))
 	fmt.Println()
 
 	if len(errorNodes) > 0 {
 		// Display known peers that we had issues connecting to
-		fmt.Fprintln(color.Output, WhiteBold("Peers with Errors:"))
+		_, _ = fmt.Fprintln(color.Output, WhiteBold("Peers with Errors:"))
 		fmt.Println()
 
 		for _, node := range errorNodes {
@@ -206,54 +206,54 @@ Network Interfaces:
 			}
 
 			nodeString := fmt.Sprintf(
-`server
+				`server
 
  nickname: %v 
      e2ee: %v... 
       api: %v 
    routes: %v 
 		   
- error: %v`, 
- 				node.peerConfig.GetNickname(), 
- 				node.peerConfig.GetPublicKey().String()[:8], 
-				api, strings.Join(ips, ","), 
+ error: %v`,
+				node.peerConfig.GetNickname(),
+				node.peerConfig.GetPublicKey().String()[:8],
+				api, strings.Join(ips, ","),
 				errorWrap(node.error, 80),
 			)
 
 			t = tree.NewTree(tree.NodeString(nodeString))
-			fmt.Fprintln(color.Output, WhiteBold(t))
+			_, _ = fmt.Fprintln(color.Output, WhiteBold(t))
 		}
 	}
 }
 
 func (cc statusCmdConfig) makeAPIRequests(ch chan<- Node, ep peer.PeerConfig) {
 	relayConfig, e2eeConfig, err := api.ServerInfo(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
-		if err != nil {
-			ch <- Node{
-				peerConfig: ep,
-				error:      err.Error(),
-			}
-			return
-
-		} else {
-			var interfaces []api.HostInterface
-			if cc.networkInfo {
-				interfaces, err = api.ServerInterfaces(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
-				if err != nil {
-					interfaces = append(interfaces, api.HostInterface{
-						Name: "ERROR: " + err.Error(),
-					})
-				}
-			}
-
-			ch <- Node{
-				peerConfig:  ep,
-				relayConfig: relayConfig,
-				e2eeConfig:  e2eeConfig,
-				interfaces: interfaces,
-			}
-			return
+	if err != nil {
+		ch <- Node{
+			peerConfig: ep,
+			error:      err.Error(),
 		}
+		return
+
+	} else {
+		var interfaces []api.HostInterface
+		if cc.networkInfo {
+			interfaces, err = api.ServerInterfaces(netip.AddrPortFrom(ep.GetApiAddr(), uint16(ApiPort)))
+			if err != nil {
+				interfaces = append(interfaces, api.HostInterface{
+					Name: "ERROR: " + err.Error(),
+				})
+			}
+		}
+
+		ch <- Node{
+			peerConfig:  ep,
+			relayConfig: relayConfig,
+			e2eeConfig:  e2eeConfig,
+			interfaces:  interfaces,
+		}
+		return
+	}
 }
 
 func errorWrap(text string, lineWidth int) string {

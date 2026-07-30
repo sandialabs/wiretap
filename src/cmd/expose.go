@@ -130,7 +130,7 @@ func (c exposeCmdConfig) Run() {
 	}
 
 	// Make API requests to the list of API addresses with the parameters: localPort, remotePort, protocol, dynamic
-	fmt.Fprintf(color.Output, "%s: local %s <- remote %d\n", GreenBold("expose"), func() string {
+	_, _ = fmt.Fprintf(color.Output, "%s: local %s <- remote %d\n", GreenBold("expose"), func() string {
 		if c.dynamic {
 			return "*"
 		} else {
@@ -140,9 +140,9 @@ func (c exposeCmdConfig) Run() {
 	for _, a := range apiAddrs {
 		err := api.Expose(netip.AddrPortFrom(a, uint16(ApiPort)), c.localPort, c.remotePort, c.protocol, c.dynamic)
 		if err != nil {
-			fmt.Fprintf(color.Output, "\t[%v] %s: %s\n", RedBold(a), RedBold("error"), Red(err))
+			_, _ = fmt.Fprintf(color.Output, "\t[%v] %s: %s\n", RedBold(a), RedBold("error"), Red(err))
 		} else {
-			fmt.Fprintf(color.Output, "\t[%v] %s\n", GreenBold(a), Green("OK"))
+			_, _ = fmt.Fprintf(color.Output, "\t[%v] %s\n", GreenBold(a), Green("OK"))
 		}
 	}
 }
@@ -169,11 +169,11 @@ func (c exposeCmdConfig) List() {
 	for _, a := range apiAddrs {
 		tuples, err := api.ExposeList(netip.AddrPortFrom(a, uint16(ApiPort)))
 		if err != nil {
-			fmt.Fprintf(color.Output, "[%v] %s: %s\n", RedBold(a), RedBold("error"), Red(err))
+			_, _ = fmt.Fprintf(color.Output, "[%v] %s: %s\n", RedBold(a), RedBold("error"), Red(err))
 		} else {
-			fmt.Fprintf(color.Output, "[%v]: %s\n", GreenBold(a), Cyan(len(tuples)))
+			_, _ = fmt.Fprintf(color.Output, "[%v]: %s\n", GreenBold(a), Cyan(len(tuples)))
 			for _, t := range tuples {
-				fmt.Fprintf(color.Output, "\tlocal %s <- remote %d/%s\n", func() string {
+				_, _ = fmt.Fprintf(color.Output, "\tlocal %s <- remote %d/%s\n", func() string {
 					if t.LocalPort == 0 {
 						return "*"
 					} else {
@@ -228,7 +228,7 @@ func (c exposeCmdConfig) Delete() {
 	}
 
 	// Make API requests to the list of API addresses with the parameters: localPort, remotePort, protocol, dynamic
-	fmt.Fprintf(color.Output, "%s: local %s <- remote %d\n", GreenBold("delete"), func() string {
+	_, _ = fmt.Fprintf(color.Output, "%s: local %s <- remote %d\n", GreenBold("delete"), func() string {
 		if c.dynamic {
 			return "*"
 		} else {
@@ -238,9 +238,9 @@ func (c exposeCmdConfig) Delete() {
 	for _, a := range apiAddrs {
 		err := api.ExposeDelete(netip.AddrPortFrom(a, uint16(ApiPort)), c.localPort, c.remotePort, c.protocol, c.dynamic)
 		if err != nil {
-			fmt.Fprintf(color.Output, "\t[%v] %s: %s\n", RedBold(a), RedBold("error"), Red(err))
+			_, _ = fmt.Fprintf(color.Output, "\t[%v] %s: %s\n", RedBold(a), RedBold("error"), Red(err))
 		} else {
-			fmt.Fprintf(color.Output, "\t[%v] %s\n", GreenBold(a), Green("Removed"))
+			_, _ = fmt.Fprintf(color.Output, "\t[%v] %s\n", GreenBold(a), Green("Removed"))
 		}
 	}
 }

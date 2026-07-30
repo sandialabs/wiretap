@@ -193,7 +193,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 		log.Println("failed new UDP bind", err)
 		return
 	}
-	defer newConn.Close()
+	defer func() { _ = newConn.Close() }()
 
 	// No other dialer with same source address has a port set, so we get to be the first!
 	tmp_addr, _ := net.ResolveUDPAddr("udp", newConn.LocalAddr().String())
@@ -226,7 +226,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 			pkt.DecRef()
 			if err != nil {
 				log.Println("error sending packet:", err)
-				newConn.Close()
+				_ = newConn.Close()
 				return
 			}
 
@@ -253,7 +253,7 @@ func handleConn(conn udpConn, port int, s *stack.Stack) {
 			}
 
 			// Force closing of goroutine by injecting nil pointer
-			newConn.Close()
+			_ = newConn.Close()
 			pktChan, ok := connMapLookup(conn)
 			if ok {
 				pktChan <- nil
@@ -278,7 +278,7 @@ func sendResponse(conn udpConn, data []byte, s *stack.Stack) {
 	var err error
 	var ipv4Layer *layers.IPv4
 	var ipv6Layer *layers.IPv6
-	var fakeSource bool = false
+	var fakeSource = false
 
 	// The IPTables DNAT rule does not properly apply to UDP return packets for some reason, need to manually fake source IP.
 	if LocalhostIP.IsValid() && conn.Dest.Addr() == netip.MustParseAddr("127.0.0.1") {
@@ -304,7 +304,7 @@ func sendResponse(conn udpConn, data []byte, s *stack.Stack) {
 		ipv4Layer = &layers.IPv4{
 			Version: 4,
 			//IHL: 5,
-			SrcIP:    func () []byte {
+			SrcIP: func() []byte {
 				if fakeSource {
 					return LocalhostIP.AsSlice()
 				} else {
@@ -363,7 +363,7 @@ func sendUnreachable(packet *stack.PacketBuffer, s *stack.Stack) {
 	var ipv4Layer *layers.IPv4
 	var ipv6Layer *layers.IPv6
 	var icmpLayer []byte
-	var fakeSource bool = false
+	var fakeSource = false
 
 	defer packet.DecRef()
 	netHeader := packet.Network()
@@ -415,9 +415,9 @@ func sendUnreachable(packet *stack.PacketBuffer, s *stack.Stack) {
 		}
 
 		ipv4Layer = &layers.IPv4{
-			Version:  4,
-			IHL:      5,
-			SrcIP:    func () []byte {
+			Version: 4,
+			IHL:     5,
+			SrcIP: func() []byte {
 				if fakeSource {
 					return LocalhostIP.AsSlice()
 				} else {

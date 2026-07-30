@@ -100,10 +100,7 @@ func (c addClientCmdConfig) Run() {
 	addresses, err := api.AllocateClientNode(apiAddrPort)
 	check("failed to retrieve address allocation from server", err)
 
-	disableV6 := false
-	if len(baseConfigE2EE.GetAddresses()) == 1 {
-		disableV6 = true
-	}
+	disableV6 := len(baseConfigE2EE.GetAddresses()) == 1
 
 	if c.port == USE_ENDPOINT_PORT {
 		if len(addArgs.outboundEndpoint) > 0 {
@@ -302,18 +299,18 @@ func (c addClientCmdConfig) Run() {
 	}
 
 	// Write and format output.
-	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, "Configurations successfully generated.")
-	fmt.Fprintln(color.Output, "Have a friend import these files into WireGuard")
-	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, fileStatusRelay)
-	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-	fmt.Fprint(color.Output, WhiteBold(clientConfigRelay.AsFile()))
-	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, fileStatusE2EE)
-	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-	fmt.Fprint(color.Output, WhiteBold(clientConfigE2EE.AsFile()))
-	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-	fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output, "Configurations successfully generated.")
+	_, _ = fmt.Fprintln(color.Output, "Have a friend import these files into WireGuard")
+	_, _ = fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output, fileStatusRelay)
+	_, _ = fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+	_, _ = fmt.Fprint(color.Output, WhiteBold(clientConfigRelay.AsFile()))
+	_, _ = fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+	_, _ = fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output, fileStatusE2EE)
+	_, _ = fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+	_, _ = fmt.Fprint(color.Output, WhiteBold(clientConfigE2EE.AsFile()))
+	_, _ = fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+	_, _ = fmt.Fprintln(color.Output)
 }

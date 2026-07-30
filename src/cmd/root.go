@@ -4,8 +4,8 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"net/netip"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 
@@ -77,7 +77,7 @@ var rootCmd = &cobra.Command{
 func Execute() {
 	rootCmd.PersistentFlags().BoolVarP(&ShowHidden, "show-hidden", "H", ShowHidden, "show hidden flag options")
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -89,12 +89,12 @@ func check(message string, err error) {
 	}
 }
 
-// Extract the port from the endpoint string 
+// Extract the port from the endpoint string
 func portFromEndpoint(endpoint string) int {
 	_, strPort, err := net.SplitHostPort(endpoint)
-	check("cannot extract port from endpoint argument", err);
-	
-	p, err := strconv.Atoi(strPort);
-	check("cannot extract port from endpoint argument", err);
-	return p;
+	check("cannot extract port from endpoint argument", err)
+
+	p, err := strconv.Atoi(strPort)
+	check("cannot extract port from endpoint argument", err)
+	return p
 }
