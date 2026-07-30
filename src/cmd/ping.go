@@ -53,7 +53,7 @@ func (c pingCmdConfig) Run() {
 
 	duration := time.Since(start)
 
-	fmt.Fprintf(color.Output, "%s: %s\n", GreenBold("response"), Green(string(response)))
-	fmt.Fprintf(color.Output, "  %s: %v\n", WhiteBold("from"), apiAddr)
-	fmt.Fprintf(color.Output, "  %s: %f %s\n", WhiteBold("time"), float64(duration)/float64(time.Millisecond), Cyan("milliseconds"))
+	_, _ = fmt.Fprintf(color.Output, "%s: %s\n", GreenBold("response"), Green(string(response)))
+	_, _ = fmt.Fprintf(color.Output, "  %s: %v\n", WhiteBold("from"), apiAddr)
+	_, _ = fmt.Fprintf(color.Output, "  %s: %f %s\n", WhiteBold("time"), float64(duration)/float64(time.Millisecond), Cyan("milliseconds"))
 }

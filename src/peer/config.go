@@ -14,20 +14,20 @@ import (
 )
 
 type Config struct {
-	config      wgtypes.Config
-	mtu         int
-	peers       []PeerConfig
-	addresses   []net.IPNet
-	localhostIP string
+	config       wgtypes.Config
+	mtu          int
+	peers        []PeerConfig
+	addresses    []net.IPNet
+	localhostIP  string
 	presharedKey *wgtypes.Key
 }
 
 type configJSON struct {
-	Config      wgtypes.Config
-	MTU         int
-	Peers       []PeerConfig
-	Addresses   []net.IPNet
-	LocalhostIP string
+	Config       wgtypes.Config
+	MTU          int
+	Peers        []PeerConfig
+	Addresses    []net.IPNet
+	LocalhostIP  string
 	PresharedKey *wgtypes.Key
 }
 
@@ -273,7 +273,7 @@ func (c *Config) GetPrivateKey() string {
 	return c.config.PrivateKey.String()
 }
 
-func (c* Config) GenPresharedKey() error {
+func (c *Config) GenPresharedKey() error {
 	key, err := wgtypes.GenerateKey()
 	if err != nil {
 		return err
@@ -282,7 +282,7 @@ func (c* Config) GenPresharedKey() error {
 	return nil
 }
 
-func (c* Config) GetPresharedKey() string {
+func (c *Config) GetPresharedKey() string {
 	if c.presharedKey != nil {
 		return c.presharedKey.String()
 	} else {
@@ -439,21 +439,21 @@ func (c *Config) AsFile() string {
 	var s strings.Builder
 
 	s.WriteString("[Interface]\n")
-	s.WriteString(fmt.Sprintf("PrivateKey = %s\n", c.config.PrivateKey.String()))
+	_, _ = fmt.Fprintf(&s, "PrivateKey = %s\n", c.config.PrivateKey.String())
 	for _, a := range c.addresses {
-		s.WriteString(fmt.Sprintf("Address = %s\n", a.String()))
+		_, _ = fmt.Fprintf(&s, "Address = %s\n", a.String())
 	}
 	if c.config.ListenPort != nil {
-		s.WriteString(fmt.Sprintf("ListenPort = %d\n", *c.config.ListenPort))
+		_, _ = fmt.Fprintf(&s, "ListenPort = %d\n", *c.config.ListenPort)
 	}
 	if c.mtu != 0 {
-		s.WriteString(fmt.Sprintf("MTU = %d\n", c.mtu))
+		_, _ = fmt.Fprintf(&s, "MTU = %d\n", c.mtu)
 	}
 	if c.localhostIP != "" {
-		s.WriteString(fmt.Sprintf("LocalhostIP = %s\n", c.localhostIP))
+		_, _ = fmt.Fprintf(&s, "LocalhostIP = %s\n", c.localhostIP)
 	}
 	for _, p := range c.peers {
-		s.WriteString(fmt.Sprintf("\n%s", p.AsFile()))
+		_, _ = fmt.Fprintf(&s, "\n%s", p.AsFile())
 	}
 
 	return s.String()
@@ -463,9 +463,9 @@ func (c *Config) AsShareableFile() string {
 	var s strings.Builder
 
 	s.WriteString("[Peer]\n")
-	s.WriteString(fmt.Sprintf("PublicKey = %s\n", c.config.PrivateKey.PublicKey().String()))
+	_, _ = fmt.Fprintf(&s, "PublicKey = %s\n", c.config.PrivateKey.PublicKey().String())
 	if c.presharedKey != nil {
-		s.WriteString(fmt.Sprintf("PresharedKey = %s\n", c.presharedKey.String()))
+		_, _ = fmt.Fprintf(&s, "PresharedKey = %s\n", c.presharedKey.String())
 	}
 	s.WriteString("AllowedIPs = 0.0.0.0/32\n")
 
@@ -475,8 +475,8 @@ func (c *Config) AsShareableFile() string {
 func (c *Config) AsIPC() string {
 	var s strings.Builder
 
-	s.WriteString(fmt.Sprintf("private_key=%s\n", hex.EncodeToString(c.config.PrivateKey[:])))
-	s.WriteString(fmt.Sprintf("listen_port=%d\n", *c.config.ListenPort))
+	_, _ = fmt.Fprintf(&s, "private_key=%s\n", hex.EncodeToString(c.config.PrivateKey[:]))
+	_, _ = fmt.Fprintf(&s, "listen_port=%d\n", *c.config.ListenPort)
 	for _, p := range c.peers {
 		s.WriteString(p.AsIPC())
 	}
@@ -515,7 +515,7 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 	// Relay Peer.
 	keys = append(keys, "WIRETAP_RELAY_PEER_PUBLICKEY")
 	vals = append(vals, relayConfig.GetPeerPublicKey(0))
-	
+
 	if relayConfig.presharedKey != nil {
 		keys = append(keys, "WIRETAP_RELAY_PEER_PRESHAREDKEY")
 		vals = append(vals, relayConfig.GetPresharedKey())
@@ -555,7 +555,7 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 			keys = append(keys, "WIRETAP_E2EE_PEER_ENDPOINT")
 			vals = append(vals, e2eeConfig.GetPeerEndpoint(0))
 		}
-	} 
+	}
 	if disableV6 {
 		keys = append(keys, "WIRETAP_DISABLEIPV6")
 		vals = append(vals, "true")
@@ -569,12 +569,12 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 	switch shell {
 	case POSIX:
 		for i := 0; i < len(keys); i++ {
-			s.WriteString(fmt.Sprintf("%s=%s ", keys[i], vals[i]))
+			_, _ = fmt.Fprintf(&s, "%s=%s ", keys[i], vals[i])
 		}
 		s.WriteString("./wiretap serve")
 	case PowerShell:
 		for i := 0; i < len(keys); i++ {
-			s.WriteString(fmt.Sprintf("$env:%s=\"%s\"; ", keys[i], vals[i]))
+			_, _ = fmt.Fprintf(&s, "$env:%s=\"%s\"; ", keys[i], vals[i])
 		}
 		s.WriteString(".\\wiretap.exe serve")
 	}
@@ -587,25 +587,25 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config, simple bool) string
 
 	// Relay Interface.
 	s.WriteString("[Relay.Interface]\n")
-	s.WriteString(fmt.Sprintf("PrivateKey = %s\n", relayConfig.GetPrivateKey()))
+	_, _ = fmt.Fprintf(&s, "PrivateKey = %s\n", relayConfig.GetPrivateKey())
 
 	if len(relayConfig.addresses) >= 1 {
-		s.WriteString(fmt.Sprintf("IPv4 = %s\n", relayConfig.addresses[0].IP.String()))
+		_, _ = fmt.Fprintf(&s, "IPv4 = %s\n", relayConfig.addresses[0].IP.String())
 	}
 	if len(relayConfig.addresses) >= 2 {
-		s.WriteString(fmt.Sprintf("IPv6 = %s\n", relayConfig.addresses[1].IP.String()))
+		_, _ = fmt.Fprintf(&s, "IPv6 = %s\n", relayConfig.addresses[1].IP.String())
 	}
 
 	if relayConfig.config.ListenPort != nil {
-		s.WriteString(fmt.Sprintf("Port = %d\n", *relayConfig.config.ListenPort))
+		_, _ = fmt.Fprintf(&s, "Port = %d\n", *relayConfig.config.ListenPort)
 	}
 
 	if relayConfig.mtu != 0 {
-		s.WriteString(fmt.Sprintf("MTU = %d\n", relayConfig.mtu))
+		_, _ = fmt.Fprintf(&s, "MTU = %d\n", relayConfig.mtu)
 	}
 
 	if relayConfig.localhostIP != "" {
-		s.WriteString(fmt.Sprintf("LocalhostIP = %s\n", relayConfig.GetLocalhostIP()))
+		_, _ = fmt.Fprintf(&s, "LocalhostIP = %s\n", relayConfig.GetLocalhostIP())
 	}
 
 	// Relay Peer.
@@ -616,30 +616,30 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config, simple bool) string
 		for _, ip := range relayConfig.peers[0].config.AllowedIPs {
 			allowed = append(allowed, ip.String())
 		}
-		s.WriteString(fmt.Sprintf("Allowed = %s\n", strings.Join(allowed, ",")))
+		_, _ = fmt.Fprintf(&s, "Allowed = %s\n", strings.Join(allowed, ","))
 	}
 
-	s.WriteString(fmt.Sprintf("PublicKey = %s\n", relayConfig.GetPeerPublicKey(0)))
+	_, _ = fmt.Fprintf(&s, "PublicKey = %s\n", relayConfig.GetPeerPublicKey(0))
 	if relayConfig.presharedKey != nil {
-		s.WriteString(fmt.Sprintf("PresharedKey = %s\n", relayConfig.GetPresharedKey()))
+		_, _ = fmt.Fprintf(&s, "PresharedKey = %s\n", relayConfig.GetPresharedKey())
 	}
 	if len(relayConfig.GetPeerEndpoint(0)) > 0 {
-		s.WriteString(fmt.Sprintf("Endpoint = %s\n", relayConfig.GetPeerEndpoint(0)))
+		_, _ = fmt.Fprintf(&s, "Endpoint = %s\n", relayConfig.GetPeerEndpoint(0))
 	}
 	if !simple {
 		// E2EE Interface.
 		s.WriteString("\n[E2EE.Interface]\n")
-		s.WriteString(fmt.Sprintf("PrivateKey = %s\n", e2eeConfig.GetPrivateKey()))
+		_, _ = fmt.Fprintf(&s, "PrivateKey = %s\n", e2eeConfig.GetPrivateKey())
 
 		if len(e2eeConfig.addresses) == 1 {
-			s.WriteString(fmt.Sprintf("Api = %s\n", e2eeConfig.addresses[0].IP.String()))
+			_, _ = fmt.Fprintf(&s, "Api = %s\n", e2eeConfig.addresses[0].IP.String())
 		}
 
 		// E2EE Peer.
 		s.WriteString("\n[E2EE.Peer]\n")
-		s.WriteString(fmt.Sprintf("PublicKey = %s\n", e2eeConfig.GetPeerPublicKey(0)))
+		_, _ = fmt.Fprintf(&s, "PublicKey = %s\n", e2eeConfig.GetPeerPublicKey(0))
 		if len(e2eeConfig.GetPeerEndpoint(0)) > 0 {
-			s.WriteString(fmt.Sprintf("Endpoint = %s\n", e2eeConfig.GetPeerEndpoint(0)))
+			_, _ = fmt.Fprintf(&s, "Endpoint = %s\n", e2eeConfig.GetPeerEndpoint(0))
 		}
 	}
 

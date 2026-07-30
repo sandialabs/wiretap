@@ -407,8 +407,6 @@ func (c addServerCmdConfig) Run() {
 	if err != nil {
 		fileStatusServer = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error creating server config file: %v", err)))
 	} else {
-		defer file.Close()
-
 		data := []string{
 			peer.CreateServerFile(serverConfigRelay, serverConfigE2EE, false),
 			"# POSIX Shell: " + peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false, disableV6),
@@ -417,7 +415,10 @@ func (c addServerCmdConfig) Run() {
 
 		_, err = file.WriteString((strings.Join(data, "\n\n")) + "\n")
 		if err != nil {
+			_ = file.Close()
 			fileStatusServer = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error writing config file: %v", err)))
+		} else if err = file.Close(); err != nil {
+			fileStatusServer = fmt.Sprintf("%s %s", RedBold("server config:"), Red(fmt.Sprintf("error closing config file: %v", err)))
 		} else {
 			fileStatusServer = fmt.Sprintf("%s %s", GreenBold("server config:"), Green(c.configFileServer))
 		}
@@ -435,30 +436,30 @@ func (c addServerCmdConfig) Run() {
 	}
 
 	// Write and format output.
-	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, "Configurations successfully generated.")
-	fmt.Fprintln(color.Output, "Import the updated config(s) into WireGuard locally and pass the arguments below to Wiretap on the new remote server.")
+	_, _ = fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output, "Configurations successfully generated.")
+	_, _ = fmt.Fprintln(color.Output, "Import the updated config(s) into WireGuard locally and pass the arguments below to Wiretap on the new remote server.")
 	if len(c.serverAddress) == 0 {
-		fmt.Fprintln(color.Output)
-		fmt.Fprintln(color.Output, fileStatusRelay)
-		fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-		fmt.Fprint(color.Output, WhiteBold(clientConfigRelay.AsFile()))
-		fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+		_, _ = fmt.Fprintln(color.Output)
+		_, _ = fmt.Fprintln(color.Output, fileStatusRelay)
+		_, _ = fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+		_, _ = fmt.Fprint(color.Output, WhiteBold(clientConfigRelay.AsFile()))
+		_, _ = fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
 	}
-	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, fileStatusE2EE)
-	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-	fmt.Fprint(color.Output, WhiteBold(clientConfigE2EE.AsFile()))
-	fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
-	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, fileStatusServer)
-	fmt.Fprintln(color.Output)
-	fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false, disableV6)))
-	fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, false, disableV6)))
-	fmt.Fprintln(color.Output, Cyan("Config File: "), Green("./wiretap serve -f "+c.configFileServer))
-	fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output, fileStatusE2EE)
+	_, _ = fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+	_, _ = fmt.Fprint(color.Output, WhiteBold(clientConfigE2EE.AsFile()))
+	_, _ = fmt.Fprintln(color.Output, Green(strings.Repeat("─", 32)))
+	_, _ = fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output, fileStatusServer)
+	_, _ = fmt.Fprintln(color.Output)
+	_, _ = fmt.Fprintln(color.Output, Cyan("POSIX Shell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.POSIX, false, disableV6)))
+	_, _ = fmt.Fprintln(color.Output, Cyan(" PowerShell: "), Green(peer.CreateServerCommand(serverConfigRelay, serverConfigE2EE, peer.PowerShell, false, disableV6)))
+	_, _ = fmt.Fprintln(color.Output, Cyan("Config File: "), Green("./wiretap serve -f "+c.configFileServer))
+	_, _ = fmt.Fprintln(color.Output)
 	if c.writeToClipboard {
-		fmt.Fprintln(color.Output, clipboardStatus)
-		fmt.Fprintln(color.Output)
+		_, _ = fmt.Fprintln(color.Output, clipboardStatus)
+		_, _ = fmt.Fprintln(color.Output)
 	}
 }

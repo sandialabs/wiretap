@@ -70,7 +70,7 @@ func Handler(c Config) func(*tcp.ForwarderRequest) {
 		// Accept conn.
 		srcConn, err := accept(&c, req)
 		if err != nil {
-			dstConn.Close()
+			_ = dstConn.Close()
 			log.Println("failed to create endpoint:", err)
 			return
 		}
@@ -107,7 +107,7 @@ func checkDst(config *Config, s stack.TransportEndpointID) (net.Conn, chan bool,
 	go func() {
 		select {
 		case <-time.After(config.CatchTimeout):
-			c.Close()
+			_ = c.Close()
 		case <-caughtChan:
 		}
 	}()
