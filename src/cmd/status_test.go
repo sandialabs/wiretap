@@ -154,8 +154,43 @@ func TestStatusJSONNetworkInfoErrorIsStructured(t *testing.T) {
 	if server.NetworkInfoError != "interface query failed" {
 		t.Fatalf("network_info_error = %q, want %q", server.NetworkInfoError, "interface query failed")
 	}
-	if len(server.Interfaces) != 0 {
-		t.Fatalf("interfaces = %#v, want empty when interface query fails", server.Interfaces)
+	if server.Interfaces == nil {
+		t.Fatal("interfaces missing, want empty array when interface query fails")
+	}
+	if len(*server.Interfaces) != 0 {
+		t.Fatalf("interfaces = %#v, want empty when interface query fails", *server.Interfaces)
+	}
+}
+
+func TestMarshalStatusJSONOmitsInterfacesWhenNetworkInfoDisabled(t *testing.T) {
+	output, err := marshalStatusJSON(statusJSONClientWithServer(t), nil, false)
+	if err != nil {
+		t.Fatalf("marshal status: %v", err)
+	}
+
+	server := firstStatusJSONServer(t, output)
+	if _, exists := server["interfaces"]; exists {
+		t.Fatalf("interfaces key present when networkInfo is false: %s", output)
+	}
+}
+
+func TestMarshalStatusJSONIncludesEmptyInterfacesWhenRequested(t *testing.T) {
+	output, err := marshalStatusJSON(statusJSONClientWithServer(t), nil, true)
+	if err != nil {
+		t.Fatalf("marshal status: %v", err)
+	}
+
+	server := firstStatusJSONServer(t, output)
+	raw, exists := server["interfaces"]
+	if !exists {
+		t.Fatalf("interfaces key missing when networkInfo is true: %s", output)
+	}
+	interfaces, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("interfaces = %#v, want array", raw)
+	}
+	if len(interfaces) != 0 {
+		t.Fatalf("interfaces = %#v, want empty array", interfaces)
 	}
 }
 
@@ -210,6 +245,40 @@ func mustNewConfig(t *testing.T) peer.Config {
 		t.Fatalf("new config: %v", err)
 	}
 	return config
+}
+
+func statusJSONClientWithServer(t *testing.T) *Node {
+	t.Helper()
+	return &Node{
+		relayConfig: mustNewConfig(t),
+		e2eeConfig:  mustNewConfig(t),
+		children: []*Node{{
+			peerConfig:  mustPeerConfig(t, "edge", []string{"10.0.0.0/24", "::2/128"}),
+			relayConfig: mustNewConfig(t),
+			e2eeConfig:  mustNewConfig(t),
+		}},
+	}
+}
+
+func firstStatusJSONServer(t *testing.T, output []byte) map[string]any {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.Unmarshal(output, &decoded); err != nil {
+		t.Fatalf("unmarshal status JSON: %v", err)
+	}
+	client, ok := decoded["client"].(map[string]any)
+	if !ok {
+		t.Fatalf("client = %#v, want object", decoded["client"])
+	}
+	children, ok := client["children"].([]any)
+	if !ok || len(children) == 0 {
+		t.Fatalf("children = %#v, want non-empty array", client["children"])
+	}
+	server, ok := children[0].(map[string]any)
+	if !ok {
+		t.Fatalf("server = %#v, want object", children[0])
+	}
+	return server
 }
 
 func mustPeerConfig(t *testing.T, nickname string, allowedIPs []string) peer.PeerConfig {

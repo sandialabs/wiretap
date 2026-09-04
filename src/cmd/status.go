@@ -46,15 +46,15 @@ type statusJSONClient struct {
 }
 
 type statusJSONServer struct {
-	Nickname         string                `json:"nickname,omitempty"`
-	RelayPublicKey   string                `json:"relay_public_key"`
-	E2EEPublicKey    string                `json:"e2ee_public_key"`
-	API              string                `json:"api"`
-	Routes           []string              `json:"routes"`
-	LocalhostIP      string                `json:"localhost_ip,omitempty"`
-	Interfaces       []statusJSONInterface `json:"interfaces"`
-	NetworkInfoError string                `json:"network_info_error,omitempty"`
-	Children         []statusJSONServer    `json:"children"`
+	Nickname         string                 `json:"nickname,omitempty"`
+	RelayPublicKey   string                 `json:"relay_public_key"`
+	E2EEPublicKey    string                 `json:"e2ee_public_key"`
+	API              string                 `json:"api"`
+	Routes           []string               `json:"routes"`
+	LocalhostIP      string                 `json:"localhost_ip,omitempty"`
+	Interfaces       *[]statusJSONInterface `json:"interfaces,omitempty"`
+	NetworkInfoError string                 `json:"network_info_error,omitempty"`
+	Children         []statusJSONServer     `json:"children"`
 }
 
 type statusJSONInterface struct {
@@ -325,7 +325,7 @@ func buildStatusJSON(client *Node, errorNodes []Node, networkInfo bool) statusJS
 	}
 
 	for _, child := range client.children {
-		output.Client.Children = append(output.Client.Children, buildStatusJSONServer(child))
+		output.Client.Children = append(output.Client.Children, buildStatusJSONServer(child, networkInfo))
 	}
 
 	for _, node := range errorNodes {
@@ -353,13 +353,8 @@ func buildStatusJSON(client *Node, errorNodes []Node, networkInfo bool) statusJS
 	return output
 }
 
-func buildStatusJSONServer(node *Node) statusJSONServer {
+func buildStatusJSONServer(node *Node, networkInfo bool) statusJSONServer {
 	apiAddr, routes := statusPeerDetails(node.peerConfig)
-	interfaces := []statusJSONInterface{}
-	if node.interfacesError == "" {
-		interfaces = statusJSONInterfaces(node.interfaces)
-	}
-
 	server := statusJSONServer{
 		Nickname:         node.peerConfig.GetNickname(),
 		RelayPublicKey:   node.relayConfig.GetPublicKey(),
@@ -367,13 +362,20 @@ func buildStatusJSONServer(node *Node) statusJSONServer {
 		API:              apiAddr,
 		Routes:           routes,
 		LocalhostIP:      node.relayConfig.GetLocalhostIP(),
-		Interfaces:       interfaces,
 		NetworkInfoError: node.interfacesError,
 		Children:         make([]statusJSONServer, 0, len(node.children)),
 	}
 
+	if networkInfo {
+		interfaces := []statusJSONInterface{}
+		if node.interfacesError == "" {
+			interfaces = statusJSONInterfaces(node.interfaces)
+		}
+		server.Interfaces = &interfaces
+	}
+
 	for _, child := range node.children {
-		server.Children = append(server.Children, buildStatusJSONServer(child))
+		server.Children = append(server.Children, buildStatusJSONServer(child, networkInfo))
 	}
 
 	return server
