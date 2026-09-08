@@ -101,7 +101,7 @@ func init() {
 	configureCmd.Flags().BoolVarP(&configureCmdArgs.writeToClipboard, "clipboard", "c", configureCmdArgs.writeToClipboard, "copy configuration args to clipboard")
 	configureCmd.Flags().BoolVarP(&configureCmdArgs.simple, "simple", "", configureCmdArgs.simple, "disable multihop and multiclient features for a simpler setup")
 
-	configureCmd.Flags().BoolVarP(&configureCmdArgs.disableApi, "disable-api", "", configureCmdArgs.disableApi, "disables server API service")
+	configureCmd.Flags().BoolVarP(&configureCmdArgs.disableApi, "disable-api", "", configureCmdArgs.disableApi, "add a config directive to disable the server API service")
 	configureCmd.Flags().StringVarP(&configureCmdArgs.apiAddr, "api", "0", configureCmdArgs.apiAddr, "address of server API service")
 	configureCmd.Flags().IntVarP(&configureCmdArgs.keepalive, "keepalive", "k", configureCmdArgs.keepalive, "tunnel keepalive in seconds, only applies to outbound handshakes")
 	configureCmd.Flags().IntVarP(&configureCmdArgs.mtu, "mtu", "m", configureCmdArgs.mtu, "tunnel MTU")
@@ -317,6 +317,9 @@ func (c configureCmdConfig) Run() {
 	if c.localhostIP != "" {
 		err = serverConfigRelay.SetLocalhostIP(c.localhostIP)
 		check("failed to set localhost IP", err)
+	}
+	if c.disableApi {
+		serverConfigRelay.SetDisableApi(c.disableApi)
 	}
 
 	// Add number to filename if it already exists.

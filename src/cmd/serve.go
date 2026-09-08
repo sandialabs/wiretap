@@ -344,17 +344,17 @@ func (c serveCmdConfig) Run() {
 		}
 	}
 
-	if viper.IsSet("disableipv6") && netip.MustParseAddr(viper.GetString("E2EE.Interface.api")).Is6() {
+	if viper.GetBool("disableipv6") && netip.MustParseAddr(viper.GetString("E2EE.Interface.api")).Is6() {
 		viper.Set("E2EE.Interface.api", wiretapDefault.apiV4Addr)
 	}
 
 	relayAddresses := []string{viper.GetString("Relay.Interface.ipv4") + "/32"}
-	if !viper.IsSet("disableipv6") {
+	if !viper.GetBool("disableipv6") {
 		relayAddresses = append(relayAddresses, viper.GetString("Relay.Interface.ipv6")+"/128")
 	}
 	aips := []string{}
 	for _, ip := range strings.Split(viper.GetString("Relay.Peer.allowed"), ",") {
-		if viper.IsSet("disableipv6") && netip.MustParsePrefix(ip).Addr().Is6() {
+		if viper.GetBool("disableipv6") && netip.MustParsePrefix(ip).Addr().Is6() {
 			continue
 		}
 
@@ -400,11 +400,11 @@ func (c serveCmdConfig) Run() {
 	check("failed to make relay configuration", err)
 
 	allowedIPs := []string{c.clientAddr4E2EE + "/32"}
-	if !viper.IsSet("disableipv6") {
+	if !viper.GetBool("disableipv6") {
 		allowedIPs = append(allowedIPs, c.clientAddr6E2EE+"/128")
 	}
 	e2eeAddresses := []string{viper.GetString("E2EE.Interface.ipv4") + "/32"}
-	if !viper.IsSet("disableipv6") {
+	if !viper.GetBool("disableipv6") {
 		e2eeAddresses = append(e2eeAddresses, viper.GetString("E2EE.Interface.ipv6")+"/128")
 	}
 	var configE2EE peer.Config
@@ -450,7 +450,7 @@ func (c serveCmdConfig) Run() {
 
 	relayAddrs := []netip.Addr{ipv4Addr}
 
-	if !viper.IsSet("disableipv6") {
+	if !viper.GetBool("disableipv6") {
 		ipv6Addr, err := netip.ParseAddr(viper.GetString("Relay.Interface.ipv6"))
 		check("failed to parse ipv6 address", err)
 		relayAddrs = append(relayAddrs, ipv6Addr)
@@ -483,7 +483,7 @@ func (c serveCmdConfig) Run() {
 		if tcpipErr != nil {
 			check("failed to enable forwarding", errors.New(tcpipErr.String()))
 		}
-		if !viper.IsSet("disableipv6") {
+		if !viper.GetBool("disableipv6") {
 			tcpipErr = s.SetForwardingDefaultAndAllNICs(ipv6.ProtocolNumber, true)
 			if tcpipErr != nil {
 				check("failed to enable forwarding", errors.New(tcpipErr.String()))
@@ -496,7 +496,7 @@ func (c serveCmdConfig) Run() {
 
 		e2eeAddrs := []netip.Addr{ipv4Addr, apiAddr}
 
-		if !viper.IsSet("disableipv6") {
+		if !viper.GetBool("disableipv6") {
 			ipv6Addr, err := netip.ParseAddr(viper.GetString("E2EE.Interface.ipv6"))
 			check("failed to parse ipv6 address", err)
 			e2eeAddrs = append(e2eeAddrs, ipv6Addr)
@@ -611,7 +611,9 @@ func (c serveCmdConfig) Run() {
 		wg.Done()
 	}()
 
-	if !viper.IsSet("disableapi") {
+	// API can be disabled via the serve flag/env (disableapi) or via a
+	// DisableApi directive in the server config file's [Relay.Interface] section.
+	if !viper.GetBool("disableapi") && !viper.GetBool("Relay.Interface.disableapi") {
 		// Start API handler.
 		wg.Add(1)
 		go func() {

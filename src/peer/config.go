@@ -14,20 +14,22 @@ import (
 )
 
 type Config struct {
-	config      wgtypes.Config
-	mtu         int
-	peers       []PeerConfig
-	addresses   []net.IPNet
-	localhostIP string
+	config       wgtypes.Config
+	mtu          int
+	peers        []PeerConfig
+	addresses    []net.IPNet
+	localhostIP  string
+	disableApi   bool
 	presharedKey *wgtypes.Key
 }
 
 type configJSON struct {
-	Config      wgtypes.Config
-	MTU         int
-	Peers       []PeerConfig
-	Addresses   []net.IPNet
-	LocalhostIP string
+	Config       wgtypes.Config
+	MTU          int
+	Peers        []PeerConfig
+	Addresses    []net.IPNet
+	LocalhostIP  string
+	DisableApi   bool
 	PresharedKey *wgtypes.Key
 }
 
@@ -40,6 +42,7 @@ type ConfigArgs struct {
 	Peers        []PeerConfigArgs
 	Addresses    []string
 	LocalhostIP  string
+	DisableApi   bool
 	PresharedKey string
 }
 
@@ -109,6 +112,10 @@ func GetConfig(args ConfigArgs) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
+	}
+
+	if args.DisableApi {
+		c.SetDisableApi(args.DisableApi)
 	}
 
 	return c, nil
@@ -238,6 +245,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		c.peers,
 		c.addresses,
 		c.localhostIP,
+		c.disableApi,
 		c.presharedKey,
 	})
 }
@@ -254,6 +262,7 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 	c.peers = tmp.Peers
 	c.addresses = tmp.Addresses
 	c.localhostIP = tmp.LocalhostIP
+	c.disableApi = tmp.DisableApi
 	c.presharedKey = tmp.PresharedKey
 
 	return nil
@@ -273,7 +282,7 @@ func (c *Config) GetPrivateKey() string {
 	return c.config.PrivateKey.String()
 }
 
-func (c* Config) GenPresharedKey() error {
+func (c *Config) GenPresharedKey() error {
 	key, err := wgtypes.GenerateKey()
 	if err != nil {
 		return err
@@ -282,7 +291,7 @@ func (c* Config) GenPresharedKey() error {
 	return nil
 }
 
-func (c* Config) GetPresharedKey() string {
+func (c *Config) GetPresharedKey() string {
 	if c.presharedKey != nil {
 		return c.presharedKey.String()
 	} else {
@@ -423,6 +432,14 @@ func (c *Config) SetLocalhostIP(ip string) error {
 	return nil
 }
 
+func (c *Config) GetDisableApi() bool {
+	return c.disableApi
+}
+
+func (c *Config) SetDisableApi(disable bool) {
+	c.disableApi = disable
+}
+
 // Convert config to peer config, only transfers keys.
 func (c *Config) AsPeer() (p PeerConfig, err error) {
 	p, err = NewPeerConfig()
@@ -515,7 +532,7 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 	// Relay Peer.
 	keys = append(keys, "WIRETAP_RELAY_PEER_PUBLICKEY")
 	vals = append(vals, relayConfig.GetPeerPublicKey(0))
-	
+
 	if relayConfig.presharedKey != nil {
 		keys = append(keys, "WIRETAP_RELAY_PEER_PRESHAREDKEY")
 		vals = append(vals, relayConfig.GetPresharedKey())
@@ -555,7 +572,7 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 			keys = append(keys, "WIRETAP_E2EE_PEER_ENDPOINT")
 			vals = append(vals, e2eeConfig.GetPeerEndpoint(0))
 		}
-	} 
+	}
 	if disableV6 {
 		keys = append(keys, "WIRETAP_DISABLEIPV6")
 		vals = append(vals, "true")
@@ -564,6 +581,11 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 	if len(relayConfig.GetLocalhostIP()) > 0 {
 		keys = append(keys, "WIRETAP_RELAY_INTERFACE_LOCALHOSTIP")
 		vals = append(vals, relayConfig.GetLocalhostIP())
+	}
+
+	if relayConfig.GetDisableApi() {
+		keys = append(keys, "WIRETAP_RELAY_INTERFACE_DISABLEAPI")
+		vals = append(vals, "true")
 	}
 
 	switch shell {
@@ -606,6 +628,10 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config, simple bool) string
 
 	if relayConfig.localhostIP != "" {
 		s.WriteString(fmt.Sprintf("LocalhostIP = %s\n", relayConfig.GetLocalhostIP()))
+	}
+
+	if relayConfig.disableApi {
+		s.WriteString("DisableApi = true\n")
 	}
 
 	// Relay Peer.
