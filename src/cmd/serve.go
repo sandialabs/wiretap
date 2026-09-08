@@ -53,6 +53,7 @@ type serveCmdConfig struct {
 	keepaliveIdle     uint
 	keepaliveCount    uint
 	keepaliveInterval uint
+	disableApi        bool
 	disableV6         bool
 	localhostIP       string
 }
@@ -90,6 +91,7 @@ var serveCmd = serveCmdConfig{
 	keepaliveIdle:     60,
 	keepaliveCount:    3,
 	keepaliveInterval: 60,
+	disableApi:        false,
 	disableV6:         false,
 	localhostIP:       "",
 }
@@ -137,6 +139,7 @@ func init() {
 	cmd.Flags().BoolVarP(&serveCmd.logging, "log", "l", serveCmd.logging, "enable logging to file")
 	cmd.Flags().StringVarP(&serveCmd.logFile, "log-file", "o", serveCmd.logFile, "write log to this filename")
 	cmd.Flags().StringVarP(&serveCmd.localhostIP, "localhost-ip", "i", serveCmd.localhostIP, "[EXPERIMENTAL] redirect Wiretap packets destined for this IPv4 address to server's localhost")
+	cmd.Flags().BoolVarP(&serveCmd.disableApi, "disable-api", "", serveCmd.disableApi, "disable API service")
 	cmd.Flags().StringP("api", "0", wiretapDefault.apiAddr, "address of API service")
 	cmd.Flags().IntP("keepalive", "k", wiretapDefault.keepalive, "tunnel keepalive in seconds")
 	cmd.Flags().IntP("mtu", "m", wiretapDefault.mtu, "tunnel MTU")
@@ -207,6 +210,8 @@ func init() {
 	check("error binding flag to viper", err)
 	err = viper.BindPFlag("E2EE.Interface.ipv6", cmd.Flags().Lookup("ipv6-e2ee"))
 	check("error binding flag to viper", err)
+	err = viper.BindPFlag("disableapi", cmd.Flags().Lookup("disable-api"))
+	check("error binding flag to viper", err)
 	err = viper.BindPFlag("E2EE.Interface.api", cmd.Flags().Lookup("api"))
 	check("error binding flag to viper", err)
 
@@ -262,6 +267,7 @@ func init() {
 				"keepalive-interval",
 				"keepalive-count",
 				"keepalive-idle",
+				"disable-api",
 				"disable-ipv6",
 			} {
 				err := cmd.Flags().MarkHidden(f)
@@ -342,17 +348,17 @@ func (c serveCmdConfig) Run() {
 		}
 	}
 
-	if viper.IsSet("disableipv6") && netip.MustParseAddr(viper.GetString("E2EE.Interface.api")).Is6() {
+	if viper.GetBool("disableipv6") && netip.MustParseAddr(viper.GetString("E2EE.Interface.api")).Is6() {
 		viper.Set("E2EE.Interface.api", wiretapDefault.apiV4Addr)
 	}
 
 	relayAddresses := []string{viper.GetString("Relay.Interface.ipv4") + "/32"}
-	if !viper.IsSet("disableipv6") {
+	if !viper.GetBool("disableipv6") {
 		relayAddresses = append(relayAddresses, viper.GetString("Relay.Interface.ipv6")+"/128")
 	}
 	aips := []string{}
 	for _, ip := range strings.Split(viper.GetString("Relay.Peer.allowed"), ",") {
-		if viper.IsSet("disableipv6") && netip.MustParsePrefix(ip).Addr().Is6() {
+		if viper.GetBool("disableipv6") && netip.MustParsePrefix(ip).Addr().Is6() {
 			continue
 		}
 
@@ -398,11 +404,11 @@ func (c serveCmdConfig) Run() {
 	check("failed to make relay configuration", err)
 
 	allowedIPs := []string{c.clientAddr4E2EE + "/32"}
-	if !viper.IsSet("disableipv6") {
+	if !viper.GetBool("disableipv6") {
 		allowedIPs = append(allowedIPs, c.clientAddr6E2EE+"/128")
 	}
 	e2eeAddresses := []string{viper.GetString("E2EE.Interface.ipv4") + "/32"}
-	if !viper.IsSet("disableipv6") {
+	if !viper.GetBool("disableipv6") {
 		e2eeAddresses = append(e2eeAddresses, viper.GetString("E2EE.Interface.ipv6")+"/128")
 	}
 	var configE2EE peer.Config
@@ -448,7 +454,7 @@ func (c serveCmdConfig) Run() {
 
 	relayAddrs := []netip.Addr{ipv4Addr}
 
-	if !viper.IsSet("disableipv6") {
+	if !viper.GetBool("disableipv6") {
 		ipv6Addr, err := netip.ParseAddr(viper.GetString("Relay.Interface.ipv6"))
 		check("failed to parse ipv6 address", err)
 		relayAddrs = append(relayAddrs, ipv6Addr)
@@ -481,7 +487,7 @@ func (c serveCmdConfig) Run() {
 		if tcpipErr != nil {
 			check("failed to enable forwarding", errors.New(tcpipErr.String()))
 		}
-		if !viper.IsSet("disableipv6") {
+		if !viper.GetBool("disableipv6") {
 			tcpipErr = s.SetForwardingDefaultAndAllNICs(ipv6.ProtocolNumber, true)
 			if tcpipErr != nil {
 				check("failed to enable forwarding", errors.New(tcpipErr.String()))
@@ -494,7 +500,7 @@ func (c serveCmdConfig) Run() {
 
 		e2eeAddrs := []netip.Addr{ipv4Addr, apiAddr}
 
-		if !viper.IsSet("disableipv6") {
+		if !viper.GetBool("disableipv6") {
 			ipv6Addr, err := netip.ParseAddr(viper.GetString("E2EE.Interface.ipv6"))
 			check("failed to parse ipv6 address", err)
 			e2eeAddrs = append(e2eeAddrs, ipv6Addr)
@@ -609,23 +615,27 @@ func (c serveCmdConfig) Run() {
 		wg.Done()
 	}()
 
-	// Start API handler.
-	wg.Add(1)
-	go func() {
-		ns := api.NetworkState{
-			NextClientRelayAddr4: netip.MustParseAddr(c.clientAddr4Relay),
-			NextClientRelayAddr6: netip.MustParseAddr(c.clientAddr6Relay),
-			NextServerRelayAddr4: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv4")),
-			NextServerRelayAddr6: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv6")),
-			NextClientE2EEAddr4:  netip.MustParseAddr(c.clientAddr4E2EE),
-			NextClientE2EEAddr6:  netip.MustParseAddr(c.clientAddr6E2EE),
-			NextServerE2EEAddr4:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv4")),
-			NextServerE2EEAddr6:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv6")),
-			ApiAddr:              netip.MustParseAddr(viper.GetString("E2EE.Interface.api")),
-		}
-		api.Handle(transportHandler, devRelay, devE2EE, &configRelay, &configE2EE, apiAddr, uint16(ApiPort), &lock, &ns)
-		wg.Done()
-	}()
+	// API can be disabled via the serve flag/env (disableapi) or via a
+	// DisableApi directive in the server config file's [Relay.Interface] section.
+	if !viper.GetBool("disableapi") && !viper.GetBool("Relay.Interface.disableapi") {
+		// Start API handler.
+		wg.Add(1)
+		go func() {
+			ns := api.NetworkState{
+				NextClientRelayAddr4: netip.MustParseAddr(c.clientAddr4Relay),
+				NextClientRelayAddr6: netip.MustParseAddr(c.clientAddr6Relay),
+				NextServerRelayAddr4: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv4")),
+				NextServerRelayAddr6: netip.MustParseAddr(viper.GetString("Relay.Interface.ipv6")),
+				NextClientE2EEAddr4:  netip.MustParseAddr(c.clientAddr4E2EE),
+				NextClientE2EEAddr6:  netip.MustParseAddr(c.clientAddr6E2EE),
+				NextServerE2EEAddr4:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv4")),
+				NextServerE2EEAddr6:  netip.MustParseAddr(viper.GetString("E2EE.Interface.ipv6")),
+				ApiAddr:              netip.MustParseAddr(viper.GetString("E2EE.Interface.api")),
+			}
+			api.Handle(transportHandler, devRelay, devE2EE, &configRelay, &configE2EE, apiAddr, uint16(ApiPort), &lock, &ns)
+			wg.Done()
+		}()
+	}
 
 	wg.Wait()
 }

@@ -19,6 +19,7 @@ type Config struct {
 	peers        []PeerConfig
 	addresses    []net.IPNet
 	localhostIP  string
+	disableApi   bool
 	presharedKey *wgtypes.Key
 }
 
@@ -28,6 +29,7 @@ type configJSON struct {
 	Peers        []PeerConfig
 	Addresses    []net.IPNet
 	LocalhostIP  string
+	DisableApi   bool
 	PresharedKey *wgtypes.Key
 }
 
@@ -40,6 +42,7 @@ type ConfigArgs struct {
 	Peers        []PeerConfigArgs
 	Addresses    []string
 	LocalhostIP  string
+	DisableApi   bool
 	PresharedKey string
 }
 
@@ -109,6 +112,10 @@ func GetConfig(args ConfigArgs) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
+	}
+
+	if args.DisableApi {
+		c.SetDisableApi(args.DisableApi)
 	}
 
 	return c, nil
@@ -238,6 +245,7 @@ func (c *Config) MarshalJSON() ([]byte, error) {
 		c.peers,
 		c.addresses,
 		c.localhostIP,
+		c.disableApi,
 		c.presharedKey,
 	})
 }
@@ -254,6 +262,7 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 	c.peers = tmp.Peers
 	c.addresses = tmp.Addresses
 	c.localhostIP = tmp.LocalhostIP
+	c.disableApi = tmp.DisableApi
 	c.presharedKey = tmp.PresharedKey
 
 	return nil
@@ -423,6 +432,14 @@ func (c *Config) SetLocalhostIP(ip string) error {
 	return nil
 }
 
+func (c *Config) GetDisableApi() bool {
+	return c.disableApi
+}
+
+func (c *Config) SetDisableApi(disable bool) {
+	c.disableApi = disable
+}
+
 // Convert config to peer config, only transfers keys.
 func (c *Config) AsPeer() (p PeerConfig, err error) {
 	p, err = NewPeerConfig()
@@ -566,6 +583,11 @@ func CreateServerCommand(relayConfig Config, e2eeConfig Config, shell Shell, sim
 		vals = append(vals, relayConfig.GetLocalhostIP())
 	}
 
+	if relayConfig.GetDisableApi() {
+		keys = append(keys, "WIRETAP_RELAY_INTERFACE_DISABLEAPI")
+		vals = append(vals, "true")
+	}
+
 	switch shell {
 	case POSIX:
 		for i := 0; i < len(keys); i++ {
@@ -606,6 +628,10 @@ func CreateServerFile(relayConfig Config, e2eeConfig Config, simple bool) string
 
 	if relayConfig.localhostIP != "" {
 		_, _ = fmt.Fprintf(&s, "LocalhostIP = %s\n", relayConfig.GetLocalhostIP())
+	}
+
+	if relayConfig.disableApi {
+		s.WriteString("DisableApi = true\n")
 	}
 
 	// Relay Peer.
