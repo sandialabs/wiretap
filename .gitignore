@@ -14,3 +14,6 @@ src/dist
 # drawio
 *.bkp
 *.dtmp
+
+# other
+trusted-ca*.crt
