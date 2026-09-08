@@ -552,9 +552,9 @@ func handleExpose(tnet *netstack.Net, exposeMap *map[ExposeTuple]ExposeConn, exp
 			c, ok := (*exposeMap)[et]
 			if ok {
 				if et.Protocol == "tcp" && c.TcpListener != nil {
-					(*c.TcpListener).Close()
+					_ = (*c.TcpListener).Close()
 				} else if c.UdpConn != nil {
-					c.UdpConn.Close()
+					_ = c.UdpConn.Close()
 				}
 				delete(*exposeMap, et)
 			} else {

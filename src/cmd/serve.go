@@ -318,7 +318,11 @@ func (c serveCmdConfig) Run() {
 	if c.logging {
 		f, err := os.OpenFile(c.logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		check("error opening log file", err)
-		defer f.Close()
+		defer func() {
+			if err := f.Close(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "error closing log file: %v\n", err)
+			}
+		}()
 
 		if c.quiet {
 			log.SetOutput(f)
