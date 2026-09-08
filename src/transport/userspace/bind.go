@@ -107,8 +107,16 @@ func (bind *UserspaceSocketBind) Open(uport uint16) ([]conn.ReceiveFunc, uint16,
 	port := int(uport)
 	var ipv4, ipv6 *gonet.UDPConn
 
-	ipv4, port, err = listenNet(bind.tnet, "udp6", port)
+	ipv4, port, err = listenNet(bind.tnet, "udp4", port)
 	if err != nil && !errors.Is(err, syscall.EAFNOSUPPORT) {
+		return nil, 0, err
+	}
+
+	ipv6, port, err = listenNet(bind.tnet, "udp6", port)
+	if err != nil && !errors.Is(err, syscall.EAFNOSUPPORT) {
+		if ipv4 != nil {
+			_ = ipv4.Close()
+		}
 		return nil, 0, err
 	}
 
@@ -117,8 +125,8 @@ func (bind *UserspaceSocketBind) Open(uport uint16) ([]conn.ReceiveFunc, uint16,
 		fns = append(fns, bind.makeReceive(ipv4))
 		bind.ipv4 = ipv4
 	}
-	if ipv4 != nil {
-		fns = append(fns, bind.makeReceive(ipv4))
+	if ipv6 != nil {
+		fns = append(fns, bind.makeReceive(ipv6))
 		bind.ipv6 = ipv6
 	}
 	if len(fns) == 0 {
@@ -139,6 +147,10 @@ func (bind *UserspaceSocketBind) Close() error {
 	if bind.ipv4 != nil {
 		err1 = bind.ipv4.Close()
 		bind.ipv4 = nil
+	}
+	if bind.ipv6 != nil {
+		err2 = bind.ipv6.Close()
+		bind.ipv6 = nil
 	}
 	bind.blackhole4 = false
 	bind.blackhole6 = false
@@ -178,6 +190,7 @@ func (bind *UserspaceSocketBind) Send(buff [][]byte, endpoint conn.Endpoint) err
 	conn := bind.ipv4
 	if addrPort.Addr().Is6() {
 		blackhole = bind.blackhole6
+		conn = bind.ipv6
 	}
 	bind.mu.Unlock()
 
