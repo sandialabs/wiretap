@@ -66,7 +66,7 @@ func makeRequest(req request) ([]byte, error) {
 }
 
 func makeUrl(apiAddr netip.AddrPort, route string, query []string) string {
-	return fmt.Sprintf("http://%v:%d/%s?%s", apiAddr.Addr(), apiAddr.Port(), route, strings.Join(query, "&"))
+	return fmt.Sprintf("http://%s/%s?%s", apiAddr, route, strings.Join(query, "&"))
 }
 
 func Ping(apiAddr netip.AddrPort) (string, error) {
