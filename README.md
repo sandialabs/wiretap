@@ -645,3 +645,9 @@ As an example, consider a new Client (C1) that is added to the second server (S3
 ```
 
 You may also need to manually edit the resulting `wiretap.conf` for the new Client to remove any `AllowedIPs` entries that already exist in the new Client's host routing table. For example, if the Server that the Client is attaching to was assigned a route for 10.2.0.0/16, but the Client already has that route (because that's the subnet where it lives), then remove the `10.2.0.0/16` entry from the `wiretap.conf` file before importing into WireGuard. Leave the API address and any other routes the new Client wishes to access.
+
+# Security Notes
+
+Wiretap's threat model currently treats all clients as fully-trusted parties entitled to full access to view and change all configuration information (including other private keys) within the network. In practice they don't necessarily get full access to everything in all situations, but you should assume that they can (now or in future changes) because the threat model does not preclude it. Access to any client config/key should be considered equivalent to complete control over the entire associated Wiretap network, by design. This design choice may be re-evaluated in the future. 
+
+Simple mode and the option to disable the API should both be considered convenience functions that have not been evaluated security-wise very thoroughly. 
